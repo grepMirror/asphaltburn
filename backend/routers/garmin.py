@@ -28,3 +28,20 @@ async def get_activities():
         return activities
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/activities/{activity_id}/details")
+async def get_activity_details(activity_id: str):
+    try:
+        client = GarminClientConnect(EMAIL, PASSWORD)
+        if not client.login():
+            raise HTTPException(status_code=401, detail="Garmin login failed")
+        
+        details = client.client.get_activity_details(activity_id)
+        splits = client.client.get_activity_splits(activity_id)
+        
+        return {
+            "details": details,
+            "splits": splits
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

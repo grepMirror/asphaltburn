@@ -1,5 +1,5 @@
 ## Next Step:
-### Priority 1
+### Priority 1 - DONE
 - Estimate time depending on a pace we enter in the route planner (default is 6.30 min/km)
 - Add an activity page to display detailed activity data when I click on it
     - Display intervals
@@ -8,6 +8,7 @@
     - Display graph elevation
 
 ### Priority 2
+- Filter the intervals split (Run, recovery, warm up, cool down, same with swim activity)
 - Add a button to plan a weekly training program which is another section
     - Could add new seance
          - This seance could be a standard jogging (adjusted with time and estimate the distance given a target pace) called 'EF

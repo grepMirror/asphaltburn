@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, TrendingUp, Compass, ChevronUp, ChevronDown, Trash2, RotateCcw, Info } from 'lucide-react';
+import { Download, TrendingUp, Compass, ChevronUp, ChevronDown, Trash2, RotateCcw, Info, Clock } from 'lucide-react';
 
 const ROAD_TYPE_COLORS = {
   "Route": "#3b82f6",          // Blue
@@ -12,18 +12,34 @@ const ROAD_TYPE_COLORS = {
   "Default": "#6366f1"          // Indigo
 };
 
-const Dashboard = ({ distance, elevation, elevationLoss, roadTypeSummary, segments, onExport, onUndo, onReset, waypointsCount }) => {
+const Dashboard = ({ distance, elevation, elevationLoss, roadTypeSummary, onUndo, onReset, waypointsCount }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [pace, setPace] = useState("6:30");
 
   const getPercentage = (dist) => {
     if (!distance || distance === 0) return 0;
     return (dist / distance) * 100;
   };
 
+  const getEstimatedTime = () => {
+    if (!distance || distance === 0) return "0h 00m";
+    const [minStr, secStr] = pace.split(':');
+    const mins = parseInt(minStr) || 0;
+    const secs = parseInt(secStr) || 0;
+    const totalPaceMins = mins + (secs / 60);
+    
+    const totalMins = distance * totalPaceMins;
+    const h = Math.floor(totalMins / 60);
+    const m = Math.floor(totalMins % 60);
+    
+    if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m`;
+    return `${m}m`;
+  };
+
   return (
     <div 
       className={`floating-dashboard glass-panel ${isExpanded ? 'expanded' : ''}`}
-      onClick={(e) => {
+      onClick={() => {
           if (isExpanded) return; // Don't collapse immediately if already expanded
           setIsExpanded(true);
       }}
@@ -36,6 +52,16 @@ const Dashboard = ({ distance, elevation, elevationLoss, roadTypeSummary, segmen
               Distance
             </div>
             <div className="stat-value">{distance} <span style={{ fontSize: '0.8rem' }}>km</span></div>
+          </div>
+          
+          <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }} />
+
+          <div className="stat-item">
+            <div className="stat-label">
+              <Clock size={12} style={{ marginRight: '4px' }} />
+              Temps
+            </div>
+            <div className="stat-value">{getEstimatedTime()}</div>
           </div>
           
           <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }} />
@@ -124,9 +150,25 @@ const Dashboard = ({ distance, elevation, elevationLoss, roadTypeSummary, segmen
                   )}
                 </div>
              </div>
-             <div>
+              <div>
                 <h4 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text-secondary)' }}>Actions</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Allure (min/km)</label>
+                    <input 
+                      type="text" 
+                      value={pace} 
+                      onChange={(e) => setPace(e.target.value)} 
+                      style={{ 
+                        background: 'rgba(255, 255, 255, 0.05)', 
+                        border: '1px solid rgba(255, 255, 255, 0.1)', 
+                        color: 'white', 
+                        padding: '0.4rem 0.8rem', 
+                        borderRadius: '0.5rem',
+                        fontSize: '0.9rem' 
+                      }} 
+                    />
+                  </div>
                   {waypointsCount > 0 && (
                     <button className="btn" onClick={onReset} style={{ width: '100%', padding: '0.8rem', background: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5', border: '1px solid rgba(239, 68, 68, 0.3)', justifyContent: 'center' }}>
                       <RotateCcw size={18} /> Réinitialiser tout

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronDown, ChevronUp, Heart, Clock, MapPin, Zap, TrendingUp } from 'lucide-react';
 
-const ActivityCard = ({ activity }) => {
+const ActivityCard = ({ activity, onClick }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const formatDuration = (seconds) => {
@@ -41,7 +41,17 @@ const ActivityCard = ({ activity }) => {
   });
 
   return (
-    <div className={`activity-card glass-panel ${isExpanded ? 'expanded' : ''}`} onClick={() => setIsExpanded(!isExpanded)}>
+    <div 
+      className={`activity-card glass-panel ${isExpanded ? 'expanded' : ''} ${onClick ? 'clickable-card' : ''}`} 
+      onClick={() => {
+        if (onClick) {
+          onClick();
+        } else {
+          setIsExpanded(!isExpanded);
+        }
+      }}
+      style={onClick ? { cursor: 'pointer', transition: 'transform 0.2s', ':hover': { transform: 'translateY(-2px)' } } : {}}
+    >
       <div className="card-main">
         <div className="activity-type-icon">
              {/* Simple icons based on type */}
@@ -71,12 +81,14 @@ const ActivityCard = ({ activity }) => {
           </div>
         </div>
 
-        <div className="expand-trigger">
-          {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-        </div>
+        {!onClick && (
+          <div className="expand-trigger">
+            {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </div>
+        )}
       </div>
 
-      {isExpanded && (
+      {!onClick && isExpanded && (
         <div className="card-details" onClick={(e) => e.stopPropagation()}>
           <div className="detail-grid">
             <div className="detail-item">

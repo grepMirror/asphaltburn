@@ -284,8 +284,19 @@ body {
 
 /* Leaflet Overrides */
 .leaflet-container {
+  font-family: 'Space Grotesk', system-ui, sans-serif !important;
+  cursor: crosshair !important;
   height: 100%;
   width: 100%;
+}
+
+.leaflet-interactive {
+  cursor: crosshair !important;
+}
+
+.leaflet-dragging .leaflet-container,
+.leaflet-dragging .leaflet-interactive {
+  cursor: grabbing !important;
 }
 
 .leaflet-control-zoom {

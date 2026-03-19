@@ -2,13 +2,14 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Loader2, Activity, Clock, MapPin, Gauge, ChevronLeft, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
 import ActivityCard from './ActivityCard';
+import ActivityDetails from './ActivityDetails';
 
 const TrainingPlanner = () => {
   const [allActivities, setAllActivities] = useState([]);
   const [filters, setFilters] = useState({ run: true, swim: true, bike: true });
   const [weekOffset, setWeekOffset] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [selectedActivity, setSelectedActivity] = useState(null);
 
   useEffect(() => {
     fetchActivities();
@@ -19,11 +20,10 @@ const TrainingPlanner = () => {
     try {
       const response = await axios.get('http://localhost:8000/api/garmin/activities');
       // Sort activities descending by start time
-      const sorted = response.data.sort((a, b) => new Date(b.startTimeLocal) - new Date(a.startTimeLocal));
+      const sorted = response.data.sort((a, b) => new Date(a.startTimeLocal) - new Date(b.startTimeLocal));
       setAllActivities(sorted);
     } catch (err) {
       console.error("Error fetching Garmin activities:", err);
-      setError("Impossible de charger les activités Garmin.");
     } finally {
       setIsLoading(false);
     }
@@ -126,6 +126,10 @@ const TrainingPlanner = () => {
     );
   };
 
+  if (selectedActivity) {
+    return <ActivityDetails activity={selectedActivity} onBack={() => setSelectedActivity(null)} />;
+  }
+
   return (
     <div className="training-planner-container">
       <div className="planner-header">
@@ -202,7 +206,7 @@ const TrainingPlanner = () => {
         <h2>{weekOffset === 0 ? "Activités Récentes" : `Activités du ${formatWeekRange()}`}</h2>
         {filteredActivities.length > 0 ? (
           filteredActivities.map(acc => (
-            <ActivityCard key={acc.activityId} activity={acc} />
+            <ActivityCard key={acc.activityId} activity={acc} onClick={() => setSelectedActivity(acc)} />
           ))
         ) : (
           <p className="no-data">Aucune activité trouvée pour cette période avec ces filtres.</p>
