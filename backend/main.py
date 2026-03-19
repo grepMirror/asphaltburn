@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import route
+from routers import route, garmin
 
 app = FastAPI(title="Route Planner API", version="1.0.0")
 
@@ -14,6 +14,7 @@ app.add_middleware(
 )
 
 app.include_router(route.router)
+app.include_router(garmin.router)
 
 @app.get("/")
 def read_root():

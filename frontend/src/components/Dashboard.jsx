@@ -127,9 +127,6 @@ const Dashboard = ({ distance, elevation, elevationLoss, roadTypeSummary, segmen
              <div>
                 <h4 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text-secondary)' }}>Actions</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <button className="btn btn-primary" onClick={onExport} disabled={waypointsCount < 2} style={{ width: '100%', padding: '0.8rem', justifyContent: 'center' }}>
-                    <Download size={18} /> Export GPX
-                  </button>
                   {waypointsCount > 0 && (
                     <button className="btn" onClick={onReset} style={{ width: '100%', padding: '0.8rem', background: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5', border: '1px solid rgba(239, 68, 68, 0.3)', justifyContent: 'center' }}>
                       <RotateCcw size={18} /> Réinitialiser tout

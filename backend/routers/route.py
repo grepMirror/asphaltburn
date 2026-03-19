@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Response
 from schemas import RouteRequest, RouteResponse, SearchResponse
-from service.IGNService import IGNService
+from service.ign_service import IGNService
 
 router = APIRouter(prefix="/api")
 

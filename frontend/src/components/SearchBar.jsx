@@ -36,7 +36,7 @@ const SearchBar = ({ onCitySelect }) => {
   };
 
   return (
-    <div className="floating-search">
+    <div className="search-widget" style={{ flexGrow: 1, width: '100%', minWidth: '250px' }}>
       <div className="search-input-wrapper">
         <Search className="search-icon" style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
         <input

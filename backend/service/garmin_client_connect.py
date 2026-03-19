@@ -1,4 +1,5 @@
 from garminconnect import Garmin
+from datetime import datetime
 from garminconnect.workout import (
     RunningWorkout,
     WorkoutSegment,
@@ -8,10 +9,29 @@ from garminconnect.workout import (
     create_interval_step,
     create_cooldown_step,
     create_repeat_group,
-    ConditionType,
     TargetType,
     StepType
 )
+from dataclasses import dataclass
+
+@dataclass
+class Target():
+    workoutTargetTypeId: TargetType = TargetType.NO_TARGET
+    workoutTargetTypeKey: str = "no.target"
+    displayOrder: int = 1
+    value: float = 0.0
+
+# Condition Type IDs
+class ConditionType:
+    """Common Garmin end condition type IDs."""
+    LAP_BUTTON = 1
+    TIME = 2
+    DISTANCE = 3
+    HEART_RATE = 4
+    CALORIES = 5
+    CADENCE = 6
+    POWER = 7
+    ITERATIONS = 8
 
 class GarminClientConnect:
     def __init__(self, email: str, password: str):
@@ -38,12 +58,15 @@ class GarminClientConnect:
         value: float,
         is_distance: bool = False,
         step_type: int = StepType.INTERVAL,
-        target: dict | None = None
+        target: Target = Target()
     ) -> ExecutableStep:
         """
         Creates an atomic step. 
         value: seconds if is_distance=False, meters if is_distance=True.
         """
+        # condition_id = ConditionType.DISTANCE if is_distance else ConditionType.TIME
+        # condition_key = "distance" if is_distance else "time"
+        
         condition_id = ConditionType.DISTANCE if is_distance else ConditionType.TIME
         condition_key = "distance" if is_distance else "time"
 
@@ -64,11 +87,12 @@ class GarminClientConnect:
                 "displayable": True,
             },
             endConditionValue=value,
-            targetType=target or {
-                "workoutTargetTypeId": TargetType.NO_TARGET,
-                "workoutTargetTypeKey": "no.target",
-                "displayOrder": 1,
-            }
+            targetType={
+                "workoutTargetTypeId": target.workoutTargetTypeId,
+                "workoutTargetTypeKey": target.workoutTargetTypeKey,
+                "displayOrder": target.displayOrder,
+            },
+            targetValue=target.value if target.value > 0 else None
         )
 
     def create_complex_interval(
@@ -122,7 +146,7 @@ if __name__ == "__main__":
         my_steps = [
             client.create_custom_step(1, 400.0, is_distance=True, step_type=StepType.INTERVAL),
             client.create_custom_step(2, 200.0, is_distance=True, step_type=StepType.RECOVERY),
-            client.create_custom_step(3, 200.0, is_distance=True, step_type=StepType.INTERVAL),
+            client.create_custom_step(3, 200.0, is_distance=True, step_type=StepType.INTERVAL, target=Target(workoutTargetTypeId=TargetType.POWER, workoutTargetTypeKey="power.zone", displayOrder=1, value=150)),
             client.create_custom_step(4, 90.0, is_distance=False, step_type=StepType.RECOVERY) # Time-based recovery
         ]
 
@@ -130,9 +154,18 @@ if __name__ == "__main__":
         workout = client.create_complex_interval(
             name="Atomic Pyramid",
             iterations=4,
-            inner_steps=my_steps
+            inner_steps=my_steps,
+            warmup_secs=600.0,
+            cooldown_secs=600.0
         )
 
         # Upload
-        res = client.upload_workout(workout)
-        print(f"Workout ID: {res['workoutId']}")
+        # res = client.upload_workout(workout)
+        # print(f"Workout ID: {res['workoutId']}")
+        
+        activities = client.client.get_activities_by_date(
+            startdate=datetime(2026, 3, 16).strftime("%Y-%m-%d"),
+            enddate=datetime(2026, 3, 18).strftime("%Y-%m-%d"),
+            activitytype="swimming"
+        )
+        print(activities)
