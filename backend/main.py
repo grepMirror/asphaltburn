@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routers import route, garmin
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
 
 app = FastAPI(title="Route Planner API", version="1.0.0")
 
