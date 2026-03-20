@@ -1,0 +1,3 @@
+lapDTOs length: 10
+First lap keys: ['startTimeGMT', 'startLatitude', 'startLongitude', 'distance', 'duration', 'movingDuration', 'elapsedDuration', 'elevationGain', 'elevationLoss', 'maxElevation', 'minElevation', 'averageSpeed', 'averageMovingSpeed', 'maxSpeed', 'calories', 'bmrCalories', 'averageHR', 'maxHR', 'averageRunCadence', 'maxRunCadence', 'averageTemperature', 'maxTemperature', 'minTemperature', 'averagePower', 'maxPower', 'minPower', 'normalizedPower', 'totalWork', 'groundContactTime', 'strideLength', 'verticalOscillation', 'verticalRatio', 'endLatitude', 'endLongitude', 'maxVerticalSpeed', 'avgGradeAdjustedSpeed', 'lapIndex', 'lengthDTOs', 'connectIQMeasurement', 'intensityType', 'messageIndex']
+Has activity object? False
