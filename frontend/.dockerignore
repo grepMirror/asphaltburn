@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+.git
+.vscode
+.dockerignore
+npm-debug.log
+README.md
+build_log.txt
