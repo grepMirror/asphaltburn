@@ -5,7 +5,20 @@ import Dashboard from './components/Dashboard';
 import TopRightMenu from './components/TopRightMenu';
 import TrainingPlanner from './components/TrainingPlanner';
 import './App.css';
-import L from 'leaflet'; // We'll use Leaflet's distanceTo for interpolation
+import L from 'leaflet';
+import { API_BASE_URL } from './config';
+import { BarChart2 } from 'lucide-react';
+
+// Custom hook: detect mobile viewport
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+};
 
 function App() {
   const [waypoints, setWaypoints] = useState([]);
@@ -20,6 +33,9 @@ function App() {
   const [searchResult, setSearchResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [view, setView] = useState('map'); // 'map' or 'training'
+  const [dashboardOpen, setDashboardOpen] = useState(false); // mobile dashboard toggle
+
+  const isMobile = useIsMobile();
 
   // When waypoints change, calculate the route
   useEffect(() => {
@@ -37,7 +53,7 @@ function App() {
   const calculateRoute = async (signal) => {
     setIsLoading(true);
     try {
-      const response = await axios.post('http://localhost:8000/api/route', {
+      const response = await axios.post(`${API_BASE_URL}/api/route`, {
         waypoints: waypoints
       }, { signal });
       setRouteInfo(response.data);
@@ -77,7 +93,7 @@ function App() {
 
   const handleExportGPX = async () => {
     try {
-      const response = await axios.post('http://localhost:8000/api/export/gpx', routeInfo, {
+      const response = await axios.post(`${API_BASE_URL}/api/export/gpx`, routeInfo, {
         responseType: 'blob'
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -137,7 +153,7 @@ function App() {
       const distanceToLast = L.latLng(newWaypoints[newWaypoints.length - 1].lat, newWaypoints[newWaypoints.length - 1].lng)
                              .distanceTo(L.latLng(lastPoint.lat, lastPoint.lng));
       
-      if (distanceToLast > 50) { // Only add if last point is at least 50m away from last 1km marker
+      if (distanceToLast > 50) {
         newWaypoints.push(lastPoint);
       }
 
@@ -152,6 +168,7 @@ function App() {
         onCitySelect={handleCitySelect} 
         onExport={handleExportGPX} 
         onImport={handleImportGPX}
+        onUndo={handleUndo}
         waypointsCount={waypoints.length}
         currentView={view}
         onViewChange={setView}
@@ -166,6 +183,7 @@ function App() {
             onMapClick={handleMapClick}
             onMarkerDrag={handleMarkerDrag}
             searchResult={searchResult}
+            isMobile={isMobile}
           />
 
           <Dashboard 
@@ -177,6 +195,10 @@ function App() {
             waypointsCount={waypoints.length}
             onUndo={handleUndo}
             onReset={handleReset}
+            isMobile={isMobile}
+            isOpen={dashboardOpen}
+            onOpen={() => setDashboardOpen(true)}
+            onClose={() => setDashboardOpen(false)}
           />
         </>
       ) : (

@@ -2,17 +2,19 @@ import { MapContainer, TileLayer, Polyline, Marker, useMapEvents, useMap } from 
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useEffect } from 'react';
+import LocationButton from './LocationButton';
+import CompassButton from './CompassButton';
 
 // Color map for road types (synced with Dashboard.jsx)
 const ROAD_TYPE_COLORS = {
-  "Route": "#3b82f6",          // Blue
-  "Chemin / Sentier": "#10b981", // Green
-  "Chemin empierré": "#059669",  // Dark Green
+  "Route": "#0040a1",          // Premium Blue
+  "Chemin / Sentier": "#10b981", // Emerald
+  "Chemin empierré": "#059669",  // Dark Emerald
   "Piste Cyclable": "#8b5cf6",   // Violet
   "Escaliers": "#f43f5e",        // Rose
   "Autoroute": "#ef4444",        // Red
-  "Autre": "#94a3b8",           // Slate
-  "Default": "#6366f1"          // Indigo
+  "Autre": "#64748b",           // Slate
+  "Default": "#0040a1"          // Premium Blue
 };
 
 // Fix for default marker icons in Leaflet with Vite
@@ -32,8 +34,8 @@ const createNumberedIcon = (number) => {
   return L.divIcon({
     className: 'numbered-marker',
     html: `<div class="marker-pin"></div><span>${number}</span>`,
-    iconSize: [30, 42],
-    iconAnchor: [15, 42]
+    iconSize: [28, 40],
+    iconAnchor: [14, 40]
   });
 };
 
@@ -89,7 +91,7 @@ const getKmMarkers = (coords) => {
   return markers;
 };
 
-const MapComponent = ({ waypoints, routeCoordinates, segments, onMapClick, onMarkerDrag, searchResult }) => {
+const MapComponent = ({ waypoints, routeCoordinates, segments, onMapClick, onMarkerDrag, searchResult, isMobile }) => {
   const kmMarkers = getKmMarkers(routeCoordinates);
 
   return (
@@ -107,6 +109,14 @@ const MapComponent = ({ waypoints, routeCoordinates, segments, onMapClick, onMar
         
         <MapEvents onMapClick={onMapClick} />
         <ChangeView center={searchResult} />
+
+        {/* Mobile-only floating action buttons */}
+        {isMobile && (
+          <>
+            <LocationButton />
+            <CompassButton />
+          </>
+        )}
 
         {waypoints.map((wp, idx) => (
           <Marker 

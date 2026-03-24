@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
-import { Download, TrendingUp, Compass, ChevronUp, ChevronDown, Trash2, RotateCcw, Info, Clock } from 'lucide-react';
+import { Download, TrendingUp, Compass, ChevronUp, ChevronDown, Trash2, RotateCcw, Info, Clock, X } from 'lucide-react';
 
 const ROAD_TYPE_COLORS = {
-  "Route": "#3b82f6",          // Blue
-  "Chemin / Sentier": "#10b981", // Green
-  "Chemin empierré": "#059669",  // Dark Green
-  "Piste Cyclable": "#8b5cf6",   // Violet
-  "Escaliers": "#f43f5e",        // Rose
-  "Autoroute": "#ef4444",        // Red
-  "Autre": "#94a3b8",           // Slate
-  "Default": "#6366f1"          // Indigo
+  "Route": "#0040a1",
+  "Chemin / Sentier": "#10b981",
+  "Chemin empierré": "#059669",
+  "Piste Cyclable": "#8b5cf6",
+  "Escaliers": "#f43f5e",
+  "Autoroute": "#ef4444",
+  "Autre": "#64748b",
+  "Default": "#0040a1"
 };
 
-const Dashboard = ({ distance, elevation, elevationLoss, roadTypeSummary, onUndo, onReset, waypointsCount }) => {
+const Dashboard = ({ distance, elevation, elevationLoss, roadTypeSummary, onUndo, onReset, waypointsCount, isMobile, isOpen, onOpen, onClose }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [pace, setPace] = useState("6:30");
 
@@ -22,7 +22,7 @@ const Dashboard = ({ distance, elevation, elevationLoss, roadTypeSummary, onUndo
   };
 
   const getEstimatedTime = () => {
-    if (!distance || distance === 0) return "0h 00m";
+    if (!distance || distance === 0) return "0:00";
     const [minStr, secStr] = pace.split(':');
     const mins = parseInt(minStr) || 0;
     const secs = parseInt(secStr) || 0;
@@ -32,152 +32,199 @@ const Dashboard = ({ distance, elevation, elevationLoss, roadTypeSummary, onUndo
     const h = Math.floor(totalMins / 60);
     const m = Math.floor(totalMins % 60);
     
-    if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m`;
-    return `${m}m`;
+    return `${h}:${m.toString().padStart(2, '0')}`;
   };
+
+  // Mobile "Peek" handle
+  if (isMobile && !isOpen) {
+    return (
+      <div 
+        className="floating-dashboard glass-panel mobile-peek"
+        onClick={(e) => { e.stopPropagation(); onOpen(); }}
+        style={{ 
+          maxWidth: 'calc(100vw - 2rem)', 
+          margin: '0 auto',
+          flexDirection: 'column', 
+          padding: '0.3rem 1rem 0.5rem',
+          minWidth: 'unset' 
+        }}
+      >
+        <div className="dashboard-handle" style={{ marginBottom: '0.3rem', width: '30px', height: '3px' }} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.25rem', width: '100%' }}>
+          <div className="mini-stat" style={{ gap: '0.3rem' }}>
+            <Compass size={14} className="text-primary" />
+            <span style={{ fontWeight: '800', fontSize: '0.9rem' }}>{distance} <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>km</span></span>
+          </div>
+          <div className="mini-stat" style={{ gap: '0.3rem' }}>
+            <Clock size={14} className="text-primary" />
+            <span style={{ fontWeight: '800', fontSize: '0.9rem' }}>{getEstimatedTime()}</span>
+          </div>
+          <div className="mini-stat" style={{ gap: '0.3rem' }}>
+            <TrendingUp size={14} style={{ color: '#10b981' }} />
+            <span style={{ fontWeight: '800', fontSize: '0.9rem', color: '#10b981' }}>{elevation} <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>m</span></span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const classNames = [
+    'floating-dashboard',
+    'glass-panel',
+    isMobile ? 'mobile-overlay' : '',
+    !isMobile && isExpanded ? 'expanded' : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <div 
-      className={`floating-dashboard glass-panel ${isExpanded ? 'expanded' : ''}`}
-      onClick={() => {
-          if (isExpanded) return; // Don't collapse immediately if already expanded
-          setIsExpanded(true);
+      className={classNames}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (!isMobile && !isExpanded) setIsExpanded(true);
+      }}
+      style={{ 
+        width: !isMobile && isExpanded ? '400px' : (!isMobile ? '450px' : undefined),
+        left: !isMobile && isExpanded ? '1rem' : '50%',
+        transform: !isMobile && isExpanded ? 'none' : 'translateX(-50%)',
+        bottom: (!isMobile && isExpanded) || isMobile ? '1rem' : '1.5rem',
+        maxHeight: !isMobile && isExpanded ? 'calc(100vh - 2rem)' : undefined,
+        overflowY: !isMobile && isExpanded ? 'auto' : undefined,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        padding: !isMobile && !isExpanded ? '0.6rem 2rem' : undefined,
+        maxWidth: isMobile ? '100vw' : 'calc(100vw - 2rem)',
+        gap: 0
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '1.2rem', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.2rem' }}>
-          <div className="stat-item">
-            <div className="stat-label">
-              <Compass size={12} style={{ marginRight: '4px' }} />
-              Distance
-            </div>
-            <div className="stat-value">{distance} <span style={{ fontSize: '0.8rem' }}>km</span></div>
+      <div className="dashboard-handle" onClick={(e) => { e.stopPropagation(); if (isMobile) onClose(); else setIsExpanded(!isExpanded); }} />
+      
+      {(isMobile || isExpanded) && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '1.5rem', flexShrink: 0 }}>
+          <div>
+            <h3 className="font-headline" style={{ fontSize: '1rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Résumé</h3>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Parcours optimisé • {distance} km</span>
           </div>
-          
-          <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }} />
-
-          <div className="stat-item">
-            <div className="stat-label">
-              <Clock size={12} style={{ marginRight: '4px' }} />
-              Temps
-            </div>
-            <div className="stat-value">{getEstimatedTime()}</div>
-          </div>
-          
-          <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }} />
-          
-          <div className="stat-item">
-            <div className="stat-label">
-              <TrendingUp size={12} style={{ marginRight: '4px', color: '#10b981' }} />
-              D+
-            </div>
-            <div className="stat-value" style={{ color: '#10b981' }}>{elevation} <span style={{ fontSize: '0.8rem' }}>m</span></div>
-          </div>
-
-          <div className="stat-item">
-            <div className="stat-label">
-              <TrendingUp size={12} style={{ marginRight: '4px', color: '#ef4444', transform: 'rotate(180deg)' }} />
-              D-
-            </div>
-            <div className="stat-value" style={{ color: '#ef4444' }}>{elevationLoss} <span style={{ fontSize: '0.8rem' }}>m</span></div>
-          </div>
-
-          <div style={{ width: '1px', height: '24px', background: 'rgba(255,255,255,0.1)' }} />
-
-          <button 
-            className="btn" 
-            onClick={(e) => { e.stopPropagation(); onUndo(); }}
-            disabled={waypointsCount === 0}
-            style={{ 
-              background: 'rgba(255, 255, 255, 0.05)', 
-              padding: '0.4rem 0.8rem',
-              fontSize: '0.8rem'
-            }}
-          >
-            <Trash2 size={14} /> Undo
+          <button className="btn glass-panel icon-btn small" onClick={(e) => { e.stopPropagation(); isMobile ? onClose() : setIsExpanded(false); }} style={{ background: '#f8fafc', border: 'none' }}>
+            <X size={18} />
           </button>
         </div>
+      )}
 
-        <div 
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}
-            onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
-        >
-          {isExpanded ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
-        </div>
-      </div>
-
-      {/* Proportional Road Type Bar (Visible in both states) */}
-      <div className="road-type-bar-container" style={{ marginTop: '1rem' }}>
-        <div className="road-type-bar" style={{ 
-          height: '8px', 
-          width: '100%', 
-          background: 'rgba(255,255,255,0.05)', 
-          borderRadius: '4px',
-          display: 'flex',
-          overflow: 'hidden'
+      <div className="stat-grid" style={{ 
+        display: 'flex',
+        flexDirection: (isExpanded || isMobile) ? 'column' : 'row',
+        justifyContent: 'center',
+        gap: (isExpanded || isMobile) ? '0.75rem' : '2rem',
+        marginBottom: (isExpanded || isMobile) ? '1rem' : '0',
+        flexShrink: 0
+      }}>
+        <div className="stat-item" style={{ 
+          background: (isExpanded || isMobile) ? '#f8fafc' : 'transparent', 
+          padding: (isExpanded || isMobile) ? '0.5rem 1rem' : '0', 
+          borderRadius: '1rem', 
+          border: (isExpanded || isMobile) ? '1px solid rgba(0,0,0,0.02)' : 'none',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: '0.6rem'
         }}>
-          {Object.entries(roadTypeSummary || {}).map(([type, dist]) => (
-            <div 
-              key={type}
-              title={`${type}: ${dist}km`}
-              style={{
-                width: `${getPercentage(dist)}%`,
-                height: '100%',
-                background: ROAD_TYPE_COLORS[type] || ROAD_TYPE_COLORS.Default,
-                transition: 'width 0.3s ease'
-              }}
-            />
-          ))}
+          <Compass size={18} className="text-primary" />
+          { (isExpanded || isMobile) && <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Distance</span> }
+          <div className="stat-value" style={{ fontSize: '1rem' }}>{distance} <span style={{ fontSize: '0.7rem' }}>km</span></div>
         </div>
+
+        <div className="stat-item" style={{ 
+          background: (isExpanded || isMobile) ? '#f8fafc' : 'transparent', 
+          padding: (isExpanded || isMobile) ? '0.5rem 1rem' : '0', 
+          borderRadius: '1rem', 
+          border: (isExpanded || isMobile) ? '1px solid rgba(0,0,0,0.02)' : 'none',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: '0.6rem'
+        }}>
+          <Clock size={16} className="text-primary" />
+          { (isExpanded || isMobile) && <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Temps</span> }
+          <div className="stat-value" style={{ fontSize: '1rem' }}>{getEstimatedTime()}h</div>
+        </div>
+
+        <div className="stat-item" style={{ 
+          background: (isExpanded || isMobile) ? '#f8fafc' : 'transparent', 
+          padding: (isExpanded || isMobile) ? '0.5rem 1rem' : '0', 
+          borderRadius: '1rem', 
+          border: (isExpanded || isMobile) ? '1px solid rgba(0,0,0,0.02)' : 'none',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: '0.6rem'
+        }}>
+          <TrendingUp size={18} style={{ color: '#10b981' }} />
+          { (isExpanded || isMobile) && <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Gain D+</span> }
+          <div className="stat-value" style={{ color: '#10b981', fontSize: '1rem' }}>{elevation} <span style={{ fontSize: '0.7rem' }}>m</span></div>
+        </div>
+
+        {(isExpanded || isMobile) && (
+          <div className="stat-item" style={{ background: '#f8fafc', padding: '0.5rem 1rem', borderRadius: '1rem', border: '1px solid rgba(0,0,0,0.02)', flexDirection: 'row', alignItems: 'center', gap: '0.6rem' }}>
+            <TrendingUp size={18} style={{ color: '#ef4444', transform: 'rotate(180deg)' }} />
+            <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Pertes D-</span>
+            <div className="stat-value" style={{ color: '#ef4444', fontSize: '1rem' }}>{elevationLoss} <span style={{ fontSize: '0.7rem' }}>m</span></div>
+          </div>
+        )}
       </div>
 
-      {isExpanded && (
-        <div className="expanded-content" onClick={(e) => e.stopPropagation()}>
-          <div className="stat-grid">
-             <div>
-                <h4 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Info size={16} /> Détails du terrain
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      {(isExpanded || isMobile) && (
+        <>
+          <div className="road-type-bar" style={{ height: '6px', width: '100%', background: '#f1f5f9', borderRadius: '99px', display: 'flex', overflow: 'hidden', marginBottom: '1.5rem', flexShrink: 0, marginTop: '1.5rem' }}>
+            {Object.entries(roadTypeSummary || {}).map(([type, dist]) => (
+              <div 
+                key={type}
+                style={{
+                  width: `${getPercentage(dist)}%`,
+                  height: '100%',
+                  background: ROAD_TYPE_COLORS[type] || ROAD_TYPE_COLORS.Default,
+                  transition: 'all 0.4s'
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="expanded-content" style={{ opacity: 1, animation: 'none', paddingBottom: isMobile ? '4rem' : '1rem' }}>
+            <div className="stat-grid" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <h4 className="font-headline" style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem' }}>Profil de surface</h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {Object.entries(roadTypeSummary || {}).map(([type, dist]) => (
-                    <div key={type} className="road-type-item" style={{ borderLeft: `4px solid ${ROAD_TYPE_COLORS[type] || ROAD_TYPE_COLORS.Default}` }}>
-                      <span style={{ fontSize: '0.9rem' }}>{type}</span>
-                      <span style={{ fontWeight: 'bold' }}>{dist} km ({Math.round(getPercentage(dist))}%)</span>
+                    <div key={type} className="road-type-item">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: ROAD_TYPE_COLORS[type] || ROAD_TYPE_COLORS.Default }} />
+                        <span style={{ fontSize: '0.85rem', fontWeight: '500' }}>{type}</span>
+                      </div>
+                      <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--primary)' }}>{dist} km</span>
                     </div>
                   ))}
-                  {Object.keys(roadTypeSummary || {}).length === 0 && (
-                    <div className="road-type-item">Placez au moins deux points pour voir les détails...</div>
-                  )}
                 </div>
-             </div>
-              <div>
-                <h4 style={{ fontSize: '1rem', marginBottom: '1rem', color: 'var(--text-secondary)' }}>Actions</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Allure (min/km)</label>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                <div>
+                  <h4 className="font-headline" style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem' }}>Paramètres</h4>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '1rem' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Allure:</span>
                     <input 
                       type="text" 
                       value={pace} 
                       onChange={(e) => setPace(e.target.value)} 
-                      style={{ 
-                        background: 'rgba(255, 255, 255, 0.05)', 
-                        border: '1px solid rgba(255, 255, 255, 0.1)', 
-                        color: 'white', 
-                        padding: '0.4rem 0.8rem', 
-                        borderRadius: '0.5rem',
-                        fontSize: '0.9rem' 
-                      }} 
+                      style={{ background: 'transparent', border: 'none', fontWeight: '800', color: 'var(--primary)', width: '60px', outline: 'none' }} 
                     />
+                    <span style={{ fontSize: '0.75rem', fontWeight: '600', opacity: 0.5 }}>min/km</span>
                   </div>
-                  {waypointsCount > 0 && (
-                    <button className="btn" onClick={onReset} style={{ width: '100%', padding: '0.8rem', background: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5', border: '1px solid rgba(239, 68, 68, 0.3)', justifyContent: 'center' }}>
-                      <RotateCcw size={18} /> Réinitialiser tout
-                    </button>
-                  )}
                 </div>
-             </div>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button className="btn" onClick={(e) => { e.stopPropagation(); onReset(); }} disabled={waypointsCount === 0} style={{ width: '100%', background: '#fee2e2', color: '#ba1a1a', borderRadius: '1rem', border: 'none', justifyContent: 'center', fontWeight: '700', fontSize: '0.85rem', padding: '0.75rem' }}>
+                    <Trash2 size={16} /> Reset
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

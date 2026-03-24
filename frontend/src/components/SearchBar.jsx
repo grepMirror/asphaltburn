@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
 const SearchBar = ({ onCitySelect }) => {
   const [query, setQuery] = useState('');
@@ -21,7 +22,7 @@ const SearchBar = ({ onCitySelect }) => {
 
   const fetchSuggestions = async () => {
     try {
-      const response = await axios.get(`http://localhost:8000/api/search?q=${query}`);
+      const response = await axios.get(`${API_BASE_URL}/api/search?q=${query}`);
       setSuggestions(response.data);
       setShowSuggestions(true);
     } catch (error) {
@@ -36,7 +37,7 @@ const SearchBar = ({ onCitySelect }) => {
   };
 
   return (
-    <div className="search-widget" style={{ flexGrow: 1, width: '100%', minWidth: '250px' }}>
+    <div className="search-widget" style={{ flexGrow: 1, width: '100%', minWidth: '250px' }} onClick={(e) => e.stopPropagation()}>
       <div className="search-input-wrapper">
         <Search className="search-icon" style={{ position: 'absolute', left: '1rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
         <input
@@ -46,15 +47,16 @@ const SearchBar = ({ onCitySelect }) => {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => setShowSuggestions(suggestions.length > 0)}
+          onClick={(e) => e.stopPropagation()}
         />
         
         {showSuggestions && suggestions.length > 0 && (
-          <div className="search-suggestions glass-panel">
+          <div className="search-suggestions glass-panel" onClick={(e) => e.stopPropagation()}>
             {suggestions.map((city, index) => (
               <div
                 key={index}
                 className="suggestion-item"
-                onClick={() => handleSelect(city)}
+                onClick={(e) => { e.stopPropagation(); handleSelect(city); }}
               >
                 {city.name}
               </div>

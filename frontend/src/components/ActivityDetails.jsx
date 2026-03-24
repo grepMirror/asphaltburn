@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { ChevronLeft, Copy, Heart, Clock, Zap, Target, Activity as ActivityIcon, TrendingUp } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { API_BASE_URL } from '../config';
 
 const ActivityDetails = ({ activity, onBack }) => {
   const [details, setDetails] = useState(null);
@@ -12,7 +13,7 @@ const ActivityDetails = ({ activity, onBack }) => {
   useEffect(() => {
     const fetchDetails = async () => {
       try {
-        const response = await axios.get(`http://localhost:8000/api/garmin/activities/${activity.activityId}/details`);
+        const response = await axios.get(`${API_BASE_URL}/api/garmin/activities/${activity.activityId}/details`);
         setDetails(response.data.details);
         setSplits(response.data.splits);
       } catch (err) {

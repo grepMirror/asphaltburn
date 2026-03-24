@@ -11,8 +11,8 @@ services:
       - /app/node_modules
     environment:
       - CHOKIDAR_USEPOLLING=true
-      - VITE_API_URL=http://192.168.1.25:8000
-      # - VITE_API_URL=http://localhost:8000
+      # Dynamic API URL detection is now handled in frontend/src/config.js using window.location.hostname
+
     depends_on:
       - backend
 

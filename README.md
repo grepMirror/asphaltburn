@@ -8,6 +8,15 @@
     - Display graph elevation
 
 ### Priority 2
+- Make the map responsive for smarthphone and UX/UI friendly
+    - Adjust the button
+    - Do not display the dashboard on smarthphone
+    - Make a button to extend the dashboard to the full screen
+- Make a button to display the user location on the map (only on smarthphone)
+    - The map zoom on it
+    - Add a boussole button on the map to orientate the map to the user location (can be activate or deactivate)
+
+### Priority 3
 - Filter the intervals split (Run, recovery, warm up, cool down, same with swim activity)
 - Add a button to plan a weekly training program which is another section
     - Could add new seance
@@ -18,6 +27,6 @@
             - These blocks can be move easily
     - Display sum of the planned week (distance, time)
 
-### Priority 3
+### Priority 4
 - Add intermediary stop on the route trace
 - Can see previous weeks when we plan a new week (to see what we did before)

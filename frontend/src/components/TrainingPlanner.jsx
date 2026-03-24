@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Loader2, Activity, Clock, MapPin, Gauge, ChevronLeft, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
 import ActivityCard from './ActivityCard';
 import ActivityDetails from './ActivityDetails';
+import { API_BASE_URL } from '../config';
 
 const TrainingPlanner = () => {
   const [allActivities, setAllActivities] = useState([]);
@@ -18,7 +19,7 @@ const TrainingPlanner = () => {
   const fetchActivities = async () => {
     setIsLoading(true);
     try {
-      const response = await axios.get('http://localhost:8000/api/garmin/activities');
+      const response = await axios.get(`${API_BASE_URL}/api/garmin/activities`);
       // Sort activities descending by start time
       const sorted = response.data.sort((a, b) => new Date(a.startTimeLocal) - new Date(b.startTimeLocal));
       setAllActivities(sorted);
