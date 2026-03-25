@@ -34,8 +34,8 @@ const createNumberedIcon = (number) => {
   return L.divIcon({
     className: 'numbered-marker',
     html: `<div class="marker-pin"></div><span>${number}</span>`,
-    iconSize: [28, 40],
-    iconAnchor: [14, 40]
+    iconSize: [30, 42],
+    iconAnchor: [15, 42]
   });
 };
 

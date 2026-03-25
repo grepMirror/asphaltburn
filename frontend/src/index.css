@@ -548,49 +548,6 @@ h1, h2, h3, h4, .font-headline {
   border: 1px solid var(--primary);
   color: var(--primary);
 }
-/* Waypoint marker styling */
-.numbered-marker {
-  width: 28px;
-  height: 40px;
-  display: flex !important;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-
-.marker-pin {
-  width: 28px;
-  height: 28px;
-  border-radius: 50% 50% 50% 0;
-  background: var(--primary);
-  position: absolute;
-  transform: rotate(-45deg);
-  /* Diamond bounding box is ~39.6px diagonally. 
-     Horizontal centering: (39.6 - 28)/2 = 5.8px offset.
-  */
-  left: -5.8px; 
-  top: 0;
-  border: 2px solid white;
-  box-shadow: 0 4px 12px rgba(0, 64, 161, 0.2);
-}
-
-.numbered-marker span {
-  position: absolute;
-  z-index: 10;
-  color: white;
-  font-weight: 800;
-  font-size: 11px;
-  width: 28px;
-  text-align: center;
-  line-height: 1;
-  pointer-events: none;
-  /* Centering adjustment: 
-     The circle head of the pin is in the upper part of the diamond.
-     Empirical centering for the circle center:
-  */
-  top: 13px;
-  left: 0;
-}
 
 /* ==============================================
    Mobile Dashboard Redesign
