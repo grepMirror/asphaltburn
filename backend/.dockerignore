@@ -14,4 +14,4 @@ pip-delete-this-directory.txt
 .dockerignore
 tests
 Dockerfile
-.env
+

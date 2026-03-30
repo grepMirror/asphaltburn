@@ -4,9 +4,9 @@
 # ========================================
 
 # ===== CONFIGURATION =====
-NAS_USER="ubuntu"
+NAS_USER="mroy"
 NAS_IP="192.168.1.57"
-NAS_PATH="/home/ubuntu/asphaltburn"
+NAS_PATH="/home/mroy/asphaltburn"
 
 echo ""
 echo "========================================"
@@ -29,62 +29,29 @@ if [ ! -f "deploy-nas.sh" ]; then
     exit 1
 fi
 
-echo ""
 echo "========================================"
-echo "[1/4] PREPARING FILES"
-echo "========================================"
-echo ""
-
-# Create temporary directory
-TEMP_DIR=$(mktemp -d)
-echo "Temporary directory: $TEMP_DIR"
-
-echo "Copying necessary files..."
-
-# Copy files
-cp -f package.json package-lock.json Dockerfile docker-compose.nas.yml docker-server.js .dockerignore "$TEMP_DIR/" 2>/dev/null
-
-cp -f vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json index.html "$TEMP_DIR/" 2>/dev/null
-cp -f tailwind.config.js postcss.config.js "$TEMP_DIR/" 2>/dev/null
-[ -f eslint.config.js ] && cp -f eslint.config.js "$TEMP_DIR/"
-cp -f .env "$TEMP_DIR/"
-
-# Copy source directories
-echo "Copying source directories..."
-cp -rf backend src public "$TEMP_DIR/" 2>/dev/null
-
-# Copy deployment script
-cp -f deploy-nas.sh "$TEMP_DIR/" 2>/dev/null
-
-echo "  [OK] Files prepared"
-
-echo ""
-echo "========================================"
-echo "[2/4] TRANSFERRING TO NAS"
+echo "[1/3] TRANSFERRING FILES TO NAS"
 echo "========================================"
 echo ""
-echo "Transferring files using SSH key authentication..."
-echo ""
+echo "Packaging and transferring (excluding node_modules and pycache)..."
+echo "This might take a moment depending on your upload speed..."
 
-cd "$TEMP_DIR"
-tar czf - . | ssh -o StrictHostKeyChecking=no "$NAS_USER@$NAS_IP" "cd $NAS_PATH && tar xzf -"
+# Package and transfer directly using tar with excludes
+tar --exclude='node_modules' --exclude='__pycache__' --exclude='.git' \
+    -czf - backend frontend docker-compose.yml deploy-nas.sh | \
+    ssh -o StrictHostKeyChecking=no "$NAS_USER@$NAS_IP" "mkdir -p $NAS_PATH && cd $NAS_PATH && tar xzf -"
 
 if [ $? -ne 0 ]; then
     echo ""
     echo "[ERROR] File transfer failed"
-    cd - >/dev/null
-    rm -rf "$TEMP_DIR"
     exit 1
 fi
 
-cd - >/dev/null
 echo "  [OK] Transfer complete"
-
-rm -rf "$TEMP_DIR"
 
 echo ""
 echo "========================================"
-echo "[3/4] SETTING PERMISSIONS AND FIXING LINE ENDINGS"
+echo "[2/3] SETTING PERMISSIONS AND FIXING LINE ENDINGS"
 echo "========================================"
 echo ""
 
@@ -93,7 +60,7 @@ ssh -o StrictHostKeyChecking=no "$NAS_USER@$NAS_IP" "sed -i 's/\r$//' $NAS_PATH/
 
 echo ""
 echo "========================================"
-echo "[4/4] EXECUTING DEPLOYMENT ON NAS"
+echo "[3/3] EXECUTING DEPLOYMENT ON NAS"
 echo "========================================"
 echo ""
 
@@ -111,7 +78,7 @@ echo "========================================"
 echo "   DEPLOYMENT COMPLETED!"
 echo "========================================"
 echo ""
-echo "   Application: http://$NAS_IP:3000"
+echo "   Application: http://$NAS_IP:5173"
 echo ""
 echo "   View logs:"
 echo "   ssh $NAS_USER@$NAS_IP"

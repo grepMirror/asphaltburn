@@ -1,5 +1,17 @@
-from garminconnect import Garmin
+import os
+import garth
+import logging
+from pathlib import Path
 from datetime import datetime
+from dataclasses import dataclass
+from garminconnect import (
+    Garmin,
+    GarminConnectAuthenticationError,
+    GarminConnectConnectionError,
+    GarminConnectTooManyRequestsError,
+)
+from garth.exc import GarthHTTPError, GarthException
+
 from garminconnect.workout import (
     RunningWorkout,
     WorkoutSegment,
@@ -12,7 +24,11 @@ from garminconnect.workout import (
     TargetType,
     StepType
 )
-from dataclasses import dataclass
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class Target():
@@ -33,18 +49,60 @@ class ConditionType:
     POWER = 7
     ITERATIONS = 8
 
+# No changes here, just removing the imports that were moved up
+
 class GarminClientConnect:
-    def __init__(self, email: str, password: str):
+    def __init__(self, email: str, password: str, token_path: str = ".garmin_session"):
+        self.email = email
+        self.password = password
+        # Resolve to absolute path to ensure consistency across different working directories
+        self.token_path = Path(token_path).resolve()
         self.client = Garmin(email, password)
         self.is_logged_in = False
 
     def login(self) -> bool:
         try:
+            # 1. Try to load existing session from disk
+            if self.token_path.exists():
+                try:
+                    logger.info(f"Attempting to resume Garmin session from {self.token_path}...")
+                    # garminconnect 0.2.0+ handles token loading via login(path)
+                    self.client.login(str(self.token_path))
+                    self.is_logged_in = True
+                    logger.info("Garmin session resumed successfully.")
+                    return True
+                except (GarminConnectTooManyRequestsError, GarthHTTPError) as e:
+                    if "429" in str(e):
+                        logger.error(f"Rate limited by Garmin (429). Please wait before retrying. Details: {e}")
+                        return False
+                    logger.warning(f"Session resumption failed: {e}. Attempting fresh login...")
+                except Exception as e:
+                    logger.warning(f"Session expired or invalid: {e}. Attempting fresh login...")
+
+            # 2. If load fails or doesn't exist, perform fresh login
+            logger.info(f"Performing fresh Garmin login for {self.email}...")
+            # Note: garmin.login() returns (result1, result2) in some versions if return_on_mfa is used,
+            # but here we use the standard call.
             self.client.login()
+            
+            # 3. Save session to disk for next time
+            self.token_path.mkdir(exist_ok=True, parents=True)
+            self.client.garth.dump(str(self.token_path))
+            logger.info(f"New Garmin session saved to {self.token_path}.")
+            
             self.is_logged_in = True
             return True
+        except GarminConnectTooManyRequestsError as e:
+            logger.error(f"Garmin rate limit hit during fresh login: {e}")
+            return False
+        except GarthHTTPError as e:
+            if "429" in str(e):
+                logger.error(f"Garmin rate limit hit (429): {e}")
+            else:
+                logger.error(f"Garmin HTTP Error: {e}")
+            return False
         except Exception as e:
-            print(f"Login failed: {e}")
+            logger.error(f"Garmin Login failed: {e}")
             return False
 
     def upload_workout(self, workout: RunningWorkout) -> dict:
@@ -130,28 +188,26 @@ class GarminClientConnect:
 if __name__ == "__main__":
     # 1. Setup credentials
     EMAIL = "mroy0407@gmail.com"
-    PASSWORD = "3s*5dcD#JGx5gHn!VAJF"
+    # Note: In a real app, use environment variables
+    PASSWORD = os.getenv("GARMIN_PASSWORD", "3s*5dcD#JGx5gHn!VAJF")
 
     # 2. Initialize our wrapper
     garmin_wrapper = GarminClientConnect(EMAIL, PASSWORD)
 
     if garmin_wrapper.login():
-        print("Logged in successfully.")
+        logger.info("Logged in successfully.")
 
-        client = GarminClientConnect(EMAIL, PASSWORD)
-
-    if client.login():
         # Create a workout: 10m Warmup, 4x(800m fast / 200m slow), 10m Cooldown
         # Note: stepOrder inside a repeat group starts at 1
         my_steps = [
-            client.create_custom_step(1, 400.0, is_distance=True, step_type=StepType.INTERVAL),
-            client.create_custom_step(2, 200.0, is_distance=True, step_type=StepType.RECOVERY),
-            client.create_custom_step(3, 200.0, is_distance=True, step_type=StepType.INTERVAL, target=Target(workoutTargetTypeId=TargetType.POWER, workoutTargetTypeKey="power.zone", displayOrder=1, value=150)),
-            client.create_custom_step(4, 90.0, is_distance=False, step_type=StepType.RECOVERY) # Time-based recovery
+            garmin_wrapper.create_custom_step(1, 400.0, is_distance=True, step_type=StepType.INTERVAL),
+            garmin_wrapper.create_custom_step(2, 200.0, is_distance=True, step_type=StepType.RECOVERY),
+            garmin_wrapper.create_custom_step(3, 200.0, is_distance=True, step_type=StepType.INTERVAL, target=Target(workoutTargetTypeId=TargetType.POWER, workoutTargetTypeKey="power.zone", displayOrder=1, value=150)),
+            garmin_wrapper.create_custom_step(4, 90.0, is_distance=False, step_type=StepType.RECOVERY) # Time-based recovery
         ]
 
         # Create the full workout
-        workout = client.create_complex_interval(
+        workout = garmin_wrapper.create_complex_interval(
             name="Atomic Pyramid",
             iterations=4,
             inner_steps=my_steps,
@@ -159,13 +215,13 @@ if __name__ == "__main__":
             cooldown_secs=600.0
         )
 
-        # Upload
-        # res = client.upload_workout(workout)
-        # print(f"Workout ID: {res['workoutId']}")
-        
-        activities = client.client.get_activities_by_date(
-            startdate=datetime(2026, 3, 16).strftime("%Y-%m-%d"),
-            enddate=datetime(2026, 3, 18).strftime("%Y-%m-%d"),
-            activitytype="swimming"
-        )
-        print(activities)
+        # Example API usage
+        try:
+            activities = garmin_wrapper.client.get_activities_by_date(
+                startdate=datetime(2026, 3, 16).strftime("%Y-%m-%d"),
+                enddate=datetime(2026, 3, 18).strftime("%Y-%m-%d"),
+                activitytype="swimming"
+            )
+            logger.info(f"Activities found: {activities}")
+        except Exception as e:
+            logger.error(f"Failed to fetch activities: {e}")

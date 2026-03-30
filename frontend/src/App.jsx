@@ -96,13 +96,16 @@ function App() {
       const response = await axios.post(`${API_BASE_URL}/api/export/gpx`, routeInfo, {
         responseType: 'blob'
       });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      // Explicitly set the type to application/gpx+xml to prevent mobile browsers from defaulting to .txt
+      const blob = new Blob([response.data], { type: 'application/gpx+xml' });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', 'route.gpx');
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Error exporting GPX:", error);
     }
