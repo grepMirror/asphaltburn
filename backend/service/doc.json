@@ -1,0 +1,319 @@
+{
+      "id": "bdtopo-pgr",
+      "description": "Publication du service Itinéraire / Isochrone via PGRouting",
+      "availableOperations": [
+        {
+          "id": "route",
+          "availableParameters": [
+            {
+              "id": "resource",
+              "values": [
+                "bdtopo-pgr"
+              ]
+            },
+            {
+              "id": "start",
+              "values": {
+                "bbox": "-63.28125,-21.421484375,55.8984375,51.27109375"
+              }
+            },
+            {
+              "id": "end",
+              "values": {
+                "bbox": "-63.28125,-21.421484375,55.8984375,51.27109375"
+              }
+            },
+            {
+              "id": "intermediates",
+              "values": {
+                "bbox": "-63.28125,-21.421484375,55.8984375,51.27109375"
+              }
+            },
+            {
+              "id": "profile",
+              "values": [
+                "car",
+                "pedestrian"
+              ],
+              "defaultValue": "car"
+            },
+            {
+              "id": "optimization",
+              "values": [
+                "fastest",
+                "shortest"
+              ],
+              "defaultValue": "fastest"
+            },
+            {
+              "id": "getSteps",
+              "values": [true, false],
+              "defaultValue": true
+            },
+            {
+              "id": "waysAttributes",
+              "values": [
+                "name",
+                "insee_commune_droite",
+                "restriction_de_poids_par_essieu",
+                "nature",
+                "importance",
+                "insee_commune_gauche",
+                "acces_pieton",
+                "nombre_de_voies",
+                "restriction_de_poids_total",
+                "position_par_rapport_au_sol",
+                "urbain",
+                "restriction_de_hauteur",
+                "itineraire_vert",
+                "cleabs",
+                "sens_de_circulation",
+                "vitesse_moyenne_vl",
+                "cpx_numero",
+                "cpx_classement_administratif",
+                "cpx_gestionnaire",
+                "cpx_toponyme_route_nommee",
+                "acces_vehicule_leger",
+                "nom_1_gauche",
+                "largeur_de_chaussee",
+                "nature_de_la_restriction",
+                "cpx_numero_route_europeenne",
+                "reserve_aux_bus",
+                "matieres_dangereuses_interdites",
+                "restriction_de_largeur",
+                "nom_1_droite",
+                "restriction_de_longueur"
+              ]
+            },
+            {
+              "id": "geometryFormat",
+              "values": [
+                "geojson",
+                "polyline",
+                "wkt"
+              ],
+              "defaultValue": "geojson"
+            },
+            {
+              "id": "getBbox",
+              "values": [true, false],
+              "defaultValue": true
+            },
+            {
+              "id": "crs",
+              "values": [
+                "EPSG:4326",
+                "EPSG:2154",
+                "EPSG:4559",
+                "EPSG:2972",
+                "EPSG:2975",
+                "EPSG:4471",
+                "EPSG:3857",
+                "EPSG:32620",
+                "EPSG:4467"
+              ],
+              "defaultValue": "EPSG:4326"
+            },
+            {
+              "id": "timeUnit",
+              "values": [
+                "hour",
+                "minute",
+                "second",
+                "standard"
+              ],
+              "defaultValue": "second"
+            },
+            {
+              "id": "distanceUnit",
+              "values": [
+                "meter",
+                "kilometer"
+              ],
+              "defaultValue": "meter"
+            },
+            {
+              "id": "constraints",
+              "values": {
+                "keys": [
+                  {
+                    "key": "waytype",
+                    "availableConstraintType": [
+                      "banned"
+                    ],
+                    "availableOperators": [
+                      "=",
+                      "!="
+                    ],
+                    "values": [
+                      "autoroute",
+                      "tunnel",
+                      "pont"
+                    ]
+                  },
+                  {
+                    "key": "largeur_de_chaussee",
+                    "availableConstraintType": [
+                      "banned"
+                    ],
+                    "availableOperators": [
+                      "=",
+                      "!=",
+                      "\u003E",
+                      "\u003E=",
+                      "\u003C",
+                      "\u003C="
+                    ]
+                  },
+                  {
+                    "key": "importance",
+                    "availableConstraintType": [
+                      "banned",
+                      "prefer",
+                      "avoid"
+                    ],
+                    "availableOperators": [
+                      "=",
+                      "!=",
+                      "\u003E",
+                      "\u003E=",
+                      "\u003C",
+                      "\u003C="
+                    ]
+                  },
+                  {
+                    "key": "nature",
+                    "availableConstraintType": [
+                      "banned"
+                    ],
+                    "availableOperators": [
+                      "=",
+                      "!="
+                    ],
+                    "values": [
+                      "sentier",
+                      "bac_ou_liaison_maritime",
+                      "bretelle",
+                      "chemin",
+                      "escalier",
+                      "piste_cyclable",
+                      "rond-point",
+                      "route_a_1_chaussee",
+                      "route_a_2_chaussees",
+                      "route_empierree",
+                      "type_autoroutier"
+                    ]
+                  },
+                  {
+                    "key": "restriction_de_hauteur",
+                    "availableConstraintType": [
+                      "banned"
+                    ],
+                    "availableOperators": [
+                      "=",
+                      "!=",
+                      "\u003E",
+                      "\u003E=",
+                      "\u003C",
+                      "\u003C="
+                    ]
+                  },
+                  {
+                    "key": "restriction_de_largeur",
+                    "availableConstraintType": [
+                      "banned"
+                    ],
+                    "availableOperators": [
+                      "=",
+                      "!=",
+                      "\u003E",
+                      "\u003E=",
+                      "\u003C",
+                      "\u003C="
+                    ]
+                  },
+                  {
+                    "key": "restriction_de_poids_total",
+                    "availableConstraintType": [
+                      "banned"
+                    ],
+                    "availableOperators": [
+                      "=",
+                      "!=",
+                      "\u003E",
+                      "\u003E=",
+                      "\u003C",
+                      "\u003C="
+                    ]
+                  },
+                  {
+                    "key": "restriction_de_poids_par_essieu",
+                    "availableConstraintType": [
+                      "banned"
+                    ],
+                    "availableOperators": [
+                      "=",
+                      "!=",
+                      "\u003E",
+                      "\u003E=",
+                      "\u003C",
+                      "\u003C="
+                    ]
+                  },
+                  {
+                    "key": "matieres_dangereuses_interdites",
+                    "availableConstraintType": [
+                      "banned"
+                    ],
+                    "availableOperators": [
+                      "=",
+                      "!="
+                    ],
+                    "values": [
+                      "vrai",
+                      "faux"
+                    ]
+                  },
+                  {
+                    "key": "itineraire_vert",
+                    "availableConstraintType": [
+                      "banned",
+                      "prefer",
+                      "avoid"
+                    ],
+                    "availableOperators": [
+                      "=",
+                      "!="
+                    ],
+                    "values": [
+                      "vrai",
+                      "faux"
+                    ]
+                  },
+                  {
+                    "key": "cpx_classement_administratif",
+                    "availableConstraintType": [
+                      "banned",
+                      "prefer",
+                      "avoid"
+                    ],
+                    "availableOperators": [
+                      "=",
+                      "!="
+                    ],
+                    "values": [
+                      "vide",
+                      "autoroute",
+                      "nationale",
+                      "departementale",
+                      "voie_communale",
+                      "chemin_rural"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+    }
+}
