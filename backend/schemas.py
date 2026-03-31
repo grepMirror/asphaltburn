@@ -11,12 +11,19 @@ class RouteSegment(BaseModel):
 class RouteRequest(BaseModel):
     waypoints: list[Waypoint]
 
+class ElevationPoint(BaseModel):
+    distance: float
+    elevation: float
+    lat: float
+    lng: float
+
 class RouteResponse(BaseModel):
     coordinates: list[list[float]]
     segments: list[RouteSegment]
     distance_km: float
     elevation_gain_m: float
     elevation_loss_m: float
+    elevation_profile: list[ElevationPoint]
     road_type_summary: dict[str, float]
 
 class SearchResponse(BaseModel):

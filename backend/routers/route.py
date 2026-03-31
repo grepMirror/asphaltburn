@@ -19,6 +19,7 @@ async def calculate_route(request: RouteRequest):
             distance_km=route_data["distance_km"],
             elevation_gain_m=elev_data["gain"],
             elevation_loss_m=elev_data["loss"],
+            elevation_profile=elev_data["profile"],
             road_type_summary=route_data["road_type_summary"]
         )
     except Exception as e:

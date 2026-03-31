@@ -1,4 +1,4 @@
-import { MapContainer, TileLayer, Polyline, Marker, useMapEvents, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, Marker, CircleMarker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useEffect } from 'react';
@@ -109,6 +109,7 @@ const MapComponent = ({ waypoints, routeCoordinates, segments, onMapClick, onMar
         
         <MapEvents onMapClick={onMapClick} />
         <ChangeView center={searchResult} />
+
 
         {/* Mobile-only floating action buttons */}
         {isMobile && (

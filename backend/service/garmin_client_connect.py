@@ -84,12 +84,12 @@ class GarminClientConnect:
             # Note: garmin.login() returns (result1, result2) in some versions if return_on_mfa is used,
             # but here we use the standard call.
             self.client.login()
-            
+
             # 3. Save session to disk for next time
             self.token_path.mkdir(exist_ok=True, parents=True)
             self.client.garth.dump(str(self.token_path))
             logger.info(f"New Garmin session saved to {self.token_path}.")
-            
+
             self.is_logged_in = True
             return True
         except GarminConnectTooManyRequestsError as e:
@@ -106,7 +106,7 @@ class GarminClientConnect:
             return False
 
     def upload_workout(self, workout: RunningWorkout) -> dict:
-        if not self.is_logged_in:
+        if not self.is_logged_in or self.client is None:
             raise ConnectionError("Login first.")
         return self.client.upload_running_workout(workout)
 
@@ -124,7 +124,7 @@ class GarminClientConnect:
         """
         # condition_id = ConditionType.DISTANCE if is_distance else ConditionType.TIME
         # condition_key = "distance" if is_distance else "time"
-        
+
         condition_id = ConditionType.DISTANCE if is_distance else ConditionType.TIME
         condition_key = "distance" if is_distance else "time"
 

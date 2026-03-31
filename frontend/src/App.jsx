@@ -28,6 +28,7 @@ function App() {
     distance_km: 0,
     elevation_gain_m: 0,
     elevation_loss_m: 0,
+    elevation_profile: [],
     road_type_summary: {}
   });
   const [searchResult, setSearchResult] = useState(null);
@@ -44,7 +45,7 @@ function App() {
     if (waypoints.length >= 2) {
       calculateRoute(controller.signal);
     } else {
-      setRouteInfo({ coordinates: [], segments: [], distance_km: 0, elevation_gain_m: 0, elevation_loss_m: 0, road_type_summary: {} });
+      setRouteInfo({ coordinates: [], segments: [], distance_km: 0, elevation_gain_m: 0, elevation_loss_m: 0, elevation_profile: [], road_type_summary: {} });
     }
 
     return () => controller.abort();
@@ -193,6 +194,7 @@ function App() {
             distance={routeInfo.distance_km}
             elevation={routeInfo.elevation_gain_m}
             elevationLoss={routeInfo.elevation_loss_m}
+            elevationProfile={routeInfo.elevation_profile}
             roadTypeSummary={routeInfo.road_type_summary}
             segments={routeInfo.segments}
             waypointsCount={waypoints.length}

@@ -1,6 +1,8 @@
 import requests
 import gpxpy.gpx
 import re
+import math
+import json
 from schemas import Waypoint, RouteSegment
 
 class IGNService:
@@ -28,24 +30,24 @@ class IGNService:
 
         for i in range(len(waypoints) - 1):
             segment_data = cls._fetch_route_segment(waypoints[i], waypoints[i+1])
-            
+
             # Global coordinates
             segment_coords = segment_data.get("geometry", {}).get("coordinates", [])
             lat_lngs = [[c[1], c[0]] for c in segment_coords]
-            
+
             if i == 0:
                 all_coordinates.extend(lat_lngs)
             else:
                 all_coordinates.extend(lat_lngs[1:])
-            
+
             total_distance_m += segment_data.get("distance", 0.0)
-            
+
             # Detailed steps analysis for color-coding and summary
             cls._process_segments_and_types(segment_data, all_segments, road_type_dist)
 
         # Final summary
         summary = {k: round(v / 1000, 2) for k, v in road_type_dist.items() if v > 0}
-        
+
         # Smart fallback if IGN data is missing
         if not summary and total_distance_m > 0:
             total_km = round(total_distance_m / 1000, 2)
@@ -62,15 +64,20 @@ class IGNService:
 
     @classmethod
     def _fetch_route_segment(cls, start: Waypoint, end: Waypoint) -> dict:
+        constraints = [
+            {"key": "itineraire_vert", "operator": "=", "value": "vrai", "constraintType": "prefer"},
+            # {"key": "cpx_classement_administratif", "operator": "=", "value": "chemin_rural", "constraintType": "prefer"}
+        ]
         params = {
             "resource": "bdtopo-pgr",
             "start": f"{start.lng},{start.lat}",
             "end": f"{end.lng},{end.lat}",
             "profile": "pedestrian",
-            "optimization": "fastest",
+            "optimization": "shortest",
             "getSteps": "true",
-            "waysAttributes": "name|nature|nom_1_gauche|nom_1_droite",
-            "geometryFormat": "geojson"
+            "waysAttributes": "name|nature|nom_1_gauche|nom_1_droite|itineraire_vert|cpx_classement_administratif",
+            "geometryFormat": "geojson",
+            "constraints": "|".join([json.dumps(c) for c in constraints])
         }
         response = requests.get(cls.NAVIGATION_URL, params=params)
         response.raise_for_status()
@@ -94,13 +101,17 @@ class IGNService:
                 # Nature extraction & normalization
                 nature = attrs.get("nature")
                 if not nature:
-                    name = (attrs.get("nom_1_gauche") or attrs.get("nom_1_droite") or "").lower()
-                    if any(x in name for x in ["sentier", "piste", "chemin", "parcours"]):
+                    # Check new attributes or fallback to name analysis
+                    if attrs.get("itineraire_vert") == "vrai" or attrs.get("cpx_classement_administratif") == "chemin_rural":
                         nature = "Chemin / Sentier"
-                    elif any(x in name for x in ["route", "rue", "avenue", "boulevard", "quai", "place"]):
-                        nature = "Route"
                     else:
-                        nature = "Autre"
+                        name = (attrs.get("nom_1_gauche") or attrs.get("nom_1_droite") or attrs.get("name") or "").lower()
+                        if any(x in name for x in ["sentier", "piste", "chemin", "parcours"]):
+                            nature = "Chemin / Sentier"
+                        elif any(x in name for x in ["route", "rue", "avenue", "boulevard", "quai", "place"]):
+                            nature = "Route"
+                        else:
+                            nature = "Autre"
 
                 norm_nature = cls._normalize_string(nature)
                 mapping = {
@@ -116,7 +127,7 @@ class IGNService:
                     "rond_point": "Route"
                 }
                 label = mapping.get(norm_nature, nature)
-                
+
                 # Accumulate for summary
                 road_type_dist[label] = road_type_dist.get(label, 0.0) + dist
 
@@ -141,12 +152,12 @@ class IGNService:
         return s
 
     @classmethod
-    def get_elevation_data(cls, coordinates: list[list[float]]) -> dict[str, float]:
+    def get_elevation_data(cls, coordinates: list[list[float]]) -> dict:
         """
-        Calculates total elevation gain (D+) and loss (D-) along coordinates.
+        Calculates total elevation gain (D+), loss (D-), and returns the full profile.
         """
         if not coordinates:
-            return {"gain": 0.0, "loss": 0.0}
+            return {"gain": 0.0, "loss": 0.0, "profile": []}
 
         # Sample points to balance speed vs accuracy (max 150 points for better D+/D- resolution)
         max_points = 150
@@ -170,24 +181,54 @@ class IGNService:
             response = requests.get(cls.ALTIMETRY_URL, params=params)
             response.raise_for_status()
             elevations = response.json().get("elevations", [])
-            
+
             total_gain = 0.0
             total_loss = 0.0
-            
-            for i in range(len(elevations) - 1):
-                z1 = elevations[i].get("z")
-                z2 = elevations[i+1].get("z")
-                
-                if z1 is not None and z2 is not None:
-                    diff = z2 - z1
-                    if diff > 0:
-                        total_gain += diff
-                    else:
-                        total_loss += abs(diff)
-                        
-            return {"gain": round(total_gain, 1), "loss": round(total_loss, 1)}
-        except Exception:
-            return {"gain": 0.0, "loss": 0.0}
+            profile = []
+            cumulative_dist = 0.0
+
+            # Calculate cumulative distances for the sampled points
+            for i in range(len(sampled)):
+                if i > 0:
+                    p1 = sampled[i-1]
+                    p2 = sampled[i]
+                    cumulative_dist += cls._haversine(p1[0], p1[1], p2[0], p2[1])
+
+                z = elevations[i].get("z", 0.0)
+                profile.append({
+                    "distance": round(cumulative_dist, 3),
+                    "elevation": z,
+                    "lat": sampled[i][0],
+                    "lng": sampled[i][1]
+                })
+
+                if i > 0:
+                    z1 = elevations[i-1].get("z")
+                    z2 = elevations[i].get("z")
+                    if z1 is not None and z2 is not None:
+                        diff = z2 - z1
+                        if diff > 0:
+                            total_gain += diff
+                        else:
+                            total_loss += abs(diff)
+
+            return {
+                "gain": round(total_gain, 1),
+                "loss": round(total_loss, 1),
+                "profile": profile
+            }
+        except Exception as e:
+            print(f"Elevation error: {e}")
+            return {"gain": 0.0, "loss": 0.0, "profile": []}
+
+    @staticmethod
+    def _haversine(lat1, lon1, lat2, lon2):
+        R = 6371.0  # Earth radius in km
+        dlat = math.radians(lat2 - lat1)
+        dlon = math.radians(lon2 - lon1)
+        a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return R * c
 
     @classmethod
     def search_location(cls, query: str) -> list[dict]:

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Download, TrendingUp, Compass, ChevronUp, ChevronDown, Trash2, RotateCcw, Info, Clock, X } from 'lucide-react';
+import ElevationChart from './ElevationChart';
 
 const ROAD_TYPE_COLORS = {
   "Route": "#0040a1",
@@ -12,7 +13,7 @@ const ROAD_TYPE_COLORS = {
   "Default": "#0040a1"
 };
 
-const Dashboard = ({ distance, elevation, elevationLoss, roadTypeSummary, onUndo, onReset, waypointsCount, isMobile, isOpen, onOpen, onClose }) => {
+const Dashboard = ({ distance, elevation, elevationLoss, elevationProfile, roadTypeSummary, onUndo, onReset, waypointsCount, isMobile, isOpen, onOpen, onClose }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [pace, setPace] = useState("6:30");
 
@@ -188,6 +189,10 @@ const Dashboard = ({ distance, elevation, elevationLoss, roadTypeSummary, onUndo
 
           <div className="expanded-content" style={{ opacity: 1, animation: 'none', paddingBottom: isMobile ? '4rem' : '1rem' }}>
             <div className="stat-grid" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div>
+                <h4 className="font-headline" style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Profil de dénivelé (X: km, Y: m)</h4>
+                <ElevationChart data={elevationProfile} />
+              </div>
               <div>
                 <h4 className="font-headline" style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem' }}>Profil de surface</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
