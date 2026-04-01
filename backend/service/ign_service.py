@@ -65,8 +65,12 @@ class IGNService:
     @classmethod
     def _fetch_route_segment(cls, start: Waypoint, end: Waypoint) -> dict:
         constraints = [
-            {"key": "itineraire_vert", "operator": "=", "value": "vrai", "constraintType": "prefer"},
+            {"key": "itineraire_vert", "operator": "=", "value": "vrai", "constraintType": "prefer"}
+            {"key": "nature", "operator": "=", "value": "route_a_2_chaussees", "constraintType": "banned"}
             # {"key": "cpx_classement_administratif", "operator": "=", "value": "chemin_rural", "constraintType": "prefer"}
+            # {"key": "cpx_classement_administratif", "operator": "=", "value": "departementale", "constraintType": "banned"},
+            # {"key": "cpx_classement_administratif", "operator": "=", "value": "nationale", "constraintType": "banned"},
+            # {"key": "cpx_classement_administratif", "operator": "=", "value": "autoroute", "constraintType": "banned"}
         ]
         params = {
             "resource": "bdtopo-pgr",
@@ -77,8 +81,10 @@ class IGNService:
             "getSteps": "true",
             "waysAttributes": "name|nature|nom_1_gauche|nom_1_droite|itineraire_vert|cpx_classement_administratif",
             "geometryFormat": "geojson",
-            "constraints": "|".join([json.dumps(c) for c in constraints])
+            # "constraints": "|".join([json.dumps(c) for c in constraints])
+            # "constraints": json.dumps({"key": "itineraire_vert", "operator": "=", "value": "vrai", "constraintType": "prefer"})
         }
+
         response = requests.get(cls.NAVIGATION_URL, params=params)
         response.raise_for_status()
         return response.json()
