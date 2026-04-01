@@ -4,6 +4,7 @@ import MapComponent from './components/MapComponent';
 import Dashboard from './components/Dashboard';
 import TopRightMenu from './components/TopRightMenu';
 import TrainingPlanner from './components/TrainingPlanner';
+import SavedRoutes from './components/SavedRoutes';
 import './App.css';
 import L from 'leaflet';
 import { API_BASE_URL } from './config';
@@ -33,7 +34,7 @@ function App() {
   });
   const [searchResult, setSearchResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [view, setView] = useState('map'); // 'map' or 'training'
+  const [view, setView] = useState('map'); // 'map', 'training', or 'saved'
   const [dashboardOpen, setDashboardOpen] = useState(false); // mobile dashboard toggle
 
   const isMobile = useIsMobile();
@@ -165,6 +166,39 @@ function App() {
     };
     reader.readAsText(file);
   };
+  
+  const handleSaveRoute = async () => {
+    if (waypoints.length < 2) return;
+    
+    const defaultName = `Itinéraire ${routeInfo.distance_km.toFixed(1)}km - ${new Date().toLocaleDateString('fr-FR')}`;
+    const name = window.prompt("Nom de l'itinéraire :", defaultName);
+    if (!name) return;
+
+    const savedRoute = {
+      id: "new",
+      name: name,
+      date: new Date().toISOString(),
+      waypoints: waypoints,
+      route_data: routeInfo
+    };
+
+    try {
+      await axios.post(`${API_BASE_URL}/api/saved-routes`, savedRoute);
+      alert("Itinéraire enregistré !");
+    } catch (error) {
+      console.error("Error saving route:", error);
+      alert("Erreur lors de l'enregistrement de l'itinéraire.");
+    }
+  };
+
+  const handleLoadRoute = (savedRoute) => {
+    // We set waypoints, which will trigger the calculateRoute useEffect.
+    // This ensures consistency even if the backend logic has changed.
+    setWaypoints(savedRoute.waypoints);
+    // We also set the routeInfo immediately for a "fast load" appearance
+    setRouteInfo(savedRoute.route_data);
+    setView('map');
+  };
 
   return (
     <div className="app-container">
@@ -204,10 +238,16 @@ function App() {
             isOpen={dashboardOpen}
             onOpen={() => setDashboardOpen(true)}
             onClose={() => setDashboardOpen(false)}
+            onSave={handleSaveRoute}
           />
         </>
-      ) : (
+      ) : view === 'training' ? (
         <TrainingPlanner />
+      ) : (
+        <SavedRoutes 
+          onLoadRoute={handleLoadRoute} 
+          onBack={() => setView('map')} 
+        />
       )}
 
       {isLoading && (

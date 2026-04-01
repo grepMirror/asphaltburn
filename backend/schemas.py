@@ -30,3 +30,17 @@ class SearchResponse(BaseModel):
     name: str
     lat: float
     lng: float
+
+class SavedRouteMetadata(BaseModel):
+    id: str
+    name: str
+    date: str
+    distance_km: float
+    elevation_gain_m: float
+
+class SavedRoute(BaseModel):
+    id: str
+    name: str
+    date: str
+    waypoints: list[Waypoint]
+    route_data: RouteResponse

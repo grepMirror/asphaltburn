@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, TrendingUp, Compass, ChevronUp, ChevronDown, Trash2, RotateCcw, Info, Clock, X } from 'lucide-react';
+import { Download, TrendingUp, Compass, ChevronUp, ChevronDown, Trash2, RotateCcw, Info, Clock, X, Save } from 'lucide-react';
 import ElevationChart from './ElevationChart';
 
 const ROAD_TYPE_COLORS = {
@@ -13,7 +13,7 @@ const ROAD_TYPE_COLORS = {
   "Default": "#0040a1"
 };
 
-const Dashboard = ({ distance, elevation, elevationLoss, elevationProfile, roadTypeSummary, onUndo, onReset, waypointsCount, isMobile, isOpen, onOpen, onClose }) => {
+const Dashboard = ({ distance, elevation, elevationLoss, elevationProfile, roadTypeSummary, onUndo, onReset, onSave, waypointsCount, isMobile, isOpen, onOpen, onClose }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [pace, setPace] = useState("6:30");
 
@@ -222,7 +222,10 @@ const Dashboard = ({ distance, elevation, elevationLoss, elevationProfile, roadT
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button className="btn" onClick={(e) => { e.stopPropagation(); onReset(); }} disabled={waypointsCount === 0} style={{ width: '100%', background: '#fee2e2', color: '#ba1a1a', borderRadius: '1rem', border: 'none', justifyContent: 'center', fontWeight: '700', fontSize: '0.85rem', padding: '0.75rem' }}>
+                  <button className="btn" onClick={(e) => { e.stopPropagation(); onSave(); }} disabled={waypointsCount < 2} style={{ width: '100%', background: 'var(--primary)', color: 'white', borderRadius: '1rem', border: 'none', justifyContent: 'center', fontWeight: '700', fontSize: '0.85rem', padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Save size={16} /> Enregistrer
+                  </button>
+                  <button className="btn" onClick={(e) => { e.stopPropagation(); onReset(); }} disabled={waypointsCount === 0} style={{ width: '100%', background: '#fee2e2', color: '#ba1a1a', borderRadius: '1rem', border: 'none', justifyContent: 'center', fontWeight: '700', fontSize: '0.85rem', padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Trash2 size={16} /> Reset
                   </button>
                 </div>

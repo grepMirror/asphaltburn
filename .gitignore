@@ -14,6 +14,8 @@ dist-ssr
 
 __pycache__
 
+map_data
+
 # Editor directories and files
 .vscode
 !.vscode/extensions.json

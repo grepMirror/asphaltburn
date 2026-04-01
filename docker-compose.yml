@@ -11,7 +11,6 @@ services:
       - /app/node_modules
     environment:
       - CHOKIDAR_USEPOLLING=true
-      # Dynamic API URL detection is now handled in frontend/src/config.js using window.location.hostname
 
     depends_on:
       - backend
@@ -25,3 +24,22 @@ services:
       - ./backend:/app
     environment:
       - PYTHONUNBUFFERED=1
+    depends_on:
+      - graphhopper
+
+  graphhopper:
+    image: israelhikingmap/graphhopper:latest
+    container_name: graphhopper
+    ports:
+      - "8989:8989"
+      - "8990:8990"
+    volumes:
+      - ./map_data:/data
+      - ./graphhopper/config.yml:/graphhopper/config.yml
+      - ./graphhopper/profile/trek.json:/graphhopper/trek.json
+    environment:
+      - "JAVA_OPTS=-Xmx8g -Xms8g"
+    # README-compliant entrypoint: direct JAR execution with forced map path
+    # entrypoint: [ "/bin/bash", "-c", "java -Ddw.graphhopper.datareader.file=/data/bretagne-260331.osm.pbf -Ddw.graphhopper.graph.location=/data/bretagne-gh -jar *.jar server config.yml" ]
+    # entrypoint: [ "/bin/bash", "-c", "java -Ddw.graphhopper.datareader.file=/data/france-260331.osm.pbf -Ddw.graphhopper.graph.location=/data/france-gh -jar *.jar server config.yml" ]
+    entrypoint: [ "/bin/bash", "-c", "java -Ddw.graphhopper.datareader.file=/data/bretagne-260331.osm.pbf -Ddw.graphhopper.graph.location=/data/bretagne-gh -jar *.jar server config.yml" ]

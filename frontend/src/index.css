@@ -687,3 +687,129 @@ h1, h2, h3, h4, .font-headline {
     gap: 1rem;
   }
 }
+
+/* Saved Routes View */
+.saved-routes-container {
+  height: 100%;
+  width: 100%;
+  padding: 6rem 2rem 2rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.saved-routes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.saved-routes-header h2 {
+  font-size: 2rem;
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.routes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.route-card {
+  padding: 1.25rem 1.5rem;
+  border-radius: 1.25rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid var(--glass-border);
+}
+
+.route-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary);
+  background: white;
+  box-shadow: 0 12px 24px rgba(0, 64, 161, 0.08);
+}
+
+.route-card-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.route-card-main h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--text-primary);
+}
+
+.route-meta {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.route-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.icon-btn.delete {
+  color: var(--text-secondary);
+}
+
+.icon-btn.delete:hover {
+  color: var(--error);
+  background: rgba(186, 26, 26, 0.1);
+}
+
+.load-indicator {
+  color: var(--primary);
+  opacity: 0;
+  transform: translateX(-10px);
+  transition: all 0.2s ease;
+}
+
+.route-card:hover .load-indicator {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.loading-state, .error-state, .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem 2rem;
+  gap: 1rem;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.spin {
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}

@@ -1,17 +1,18 @@
 from fastapi import APIRouter, HTTPException, Response
 from schemas import RouteRequest, RouteResponse, SearchResponse
 from service.ign_service import IGNService
+from service.graphhopper_service import GraphHopperService
 
 router = APIRouter(prefix="/api")
 
 @router.post("/route", response_model=RouteResponse)
 async def calculate_route(request: RouteRequest):
     try:
-        # 1. Get the route path and distance
-        route_data = IGNService.get_route(request.waypoints)
+        # Use GraphHopper for routing
+        route_data = GraphHopperService.get_route(request.waypoints)
 
-        # 2. Calculate elevation gain (D+) and loss (D-)
-        elev_data = IGNService.get_elevation_data(route_data["coordinates"])
+        # GraphHopper already calculates elevation gain/loss
+        elev_data = route_data.get("elevation_data", {"gain": 0.0, "loss": 0.0, "profile": []})
 
         return RouteResponse(
             coordinates=route_data["coordinates"],

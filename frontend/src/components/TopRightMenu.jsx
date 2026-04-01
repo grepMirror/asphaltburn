@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Upload, Download, X, Calendar, Map as MapIcon, RotateCcw } from 'lucide-react';
+import { Search, Upload, Download, X, Calendar, Map as MapIcon, RotateCcw, List } from 'lucide-react';
 import SearchBar from './SearchBar';
 
 const TopRightMenu = ({ onCitySelect, onExport, onImport, onUndo, waypointsCount, currentView, onViewChange }) => {
@@ -60,6 +60,14 @@ const TopRightMenu = ({ onCitySelect, onExport, onImport, onUndo, waypointsCount
             title="Training Calendar"
           >
             <Calendar size={20} />
+          </button>
+
+          <button 
+            className={`icon-btn ${currentView === 'saved' ? 'active' : ''}`} 
+            onClick={() => onViewChange('saved')} 
+            title="Saved Routes"
+          >
+            <List size={20} />
           </button>
 
           <div style={{ width: '1px', height: '20px', background: 'rgba(0,0,0,0.05)', margin: '0 0.25rem' }} />
