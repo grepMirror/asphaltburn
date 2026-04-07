@@ -10,6 +10,7 @@ class RouteSegment(BaseModel):
 
 class RouteRequest(BaseModel):
     waypoints: list[Waypoint]
+    provider: str = "ign"
 
 class ElevationPoint(BaseModel):
     distance: float
@@ -37,6 +38,8 @@ class SavedRouteMetadata(BaseModel):
     date: str
     distance_km: float
     elevation_gain_m: float
+    trek_id: str | None = None
+    trek_name: str | None = None
 
 class SavedRoute(BaseModel):
     id: str
@@ -44,3 +47,5 @@ class SavedRoute(BaseModel):
     date: str
     waypoints: list[Waypoint]
     route_data: RouteResponse
+    trek_id: str | None = None
+    trek_name: str | None = None

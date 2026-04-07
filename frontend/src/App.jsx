@@ -8,7 +8,7 @@ import SavedRoutes from './components/SavedRoutes';
 import './App.css';
 import L from 'leaflet';
 import { API_BASE_URL } from './config';
-import { BarChart2 } from 'lucide-react';
+import { BarChart2, Search, Loader2 } from 'lucide-react';
 
 // Custom hook: detect mobile viewport
 const useIsMobile = () => {
@@ -32,10 +32,15 @@ function App() {
     elevation_profile: [],
     road_type_summary: {}
   });
+  const [trekRoutes, setTrekRoutes] = useState([]);
+  const [activeTrek, setActiveTrek] = useState(null); // { id: string, name: string }
   const [searchResult, setSearchResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [view, setView] = useState('map'); // 'map', 'training', or 'saved'
   const [dashboardOpen, setDashboardOpen] = useState(false); // mobile dashboard toggle
+  const [pois, setPois] = useState([]);
+  const [mapBounds, setMapBounds] = useState(null);
+  const [isSearchingPOIs, setIsSearchingPOIs] = useState(false);
 
   const isMobile = useIsMobile();
 
@@ -91,6 +96,8 @@ function App() {
 
   const handleReset = () => {
     setWaypoints([]);
+    setTrekRoutes([]);
+    setActiveTrek(null);
   };
 
   const handleExportGPX = async () => {
@@ -179,8 +186,21 @@ function App() {
       name: name,
       date: new Date().toISOString(),
       waypoints: waypoints,
-      route_data: routeInfo
+      route_data: routeInfo,
+      trek_id: activeTrek?.id || null,
+      trek_name: activeTrek?.name || null
     };
+
+    if (!activeTrek) {
+      const trekNameInput = window.prompt("Nom du Trek (optionnel - pour grouper plusieurs étapes) :");
+      if (trekNameInput) {
+        savedRoute.trek_name = trekNameInput;
+        savedRoute.trek_id = btoa(trekNameInput).substring(0, 8);
+      }
+    } else {
+      // Confirm saving within active trek
+      if (!window.confirm(`Enregistrer ce segment comme nouvelle étape du trek "${activeTrek.name}" ?`)) return;
+    }
 
     try {
       await axios.post(`${API_BASE_URL}/api/saved-routes`, savedRoute);
@@ -191,13 +211,67 @@ function App() {
     }
   };
 
-  const handleLoadRoute = (savedRoute) => {
+  const handleLoadRoute = async (savedRoute) => {
     // We set waypoints, which will trigger the calculateRoute useEffect.
-    // This ensures consistency even if the backend logic has changed.
     setWaypoints(savedRoute.waypoints);
-    // We also set the routeInfo immediately for a "fast load" appearance
     setRouteInfo(savedRoute.route_data);
+    
+    // Fetch trek companions if needed
+    if (savedRoute.trek_id) {
+      setActiveTrek({ id: savedRoute.trek_id, name: savedRoute.trek_name });
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/saved-routes/trek/${savedRoute.trek_id}`);
+        // Filter out the current route
+        setTrekRoutes(response.data.filter(r => r.id !== savedRoute.id));
+      } catch (error) {
+        console.error("Error fetching trek routes:", error);
+      }
+    } else {
+      setTrekRoutes([]);
+      setActiveTrek(null);
+    }
+    
     setView('map');
+  };
+
+  const handleCreateTrekStep = async (trekId, trekName) => {
+    setWaypoints([]);
+    setRouteInfo({ coordinates: [], segments: [], distance_km: 0, elevation_gain_m: 0, elevation_loss_m: 0, elevation_profile: [], road_type_summary: {} });
+    setActiveTrek({ id: trekId, name: trekName });
+    
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/saved-routes/trek/${trekId}`);
+      setTrekRoutes(response.data);
+    } catch (error) {
+      console.error("Error fetching trek routes:", error);
+    }
+    
+    setView('map');
+  };
+
+  const handleSearchPOIs = async () => {
+    if (!mapBounds) return;
+    setIsSearchingPOIs(true);
+    try {
+      const { _southWest, _northEast } = mapBounds;
+      const response = await axios.get(`${API_BASE_URL}/api/pois`, {
+        params: {
+          min_lat: _southWest.lat,
+          min_lon: _southWest.lng,
+          max_lat: _northEast.lat,
+          max_lon: _northEast.lng
+        }
+      });
+      setPois(response.data);
+      if (response.data.length === 0) {
+        alert("Aucun point d'intérêt trouvé dans cette zone.");
+      }
+    } catch (error) {
+      console.error("Error searching POIs:", error);
+      alert("Erreur lors de la recherche des points d'intérêt.");
+    } finally {
+      setIsSearchingPOIs(false);
+    }
   };
 
   return (
@@ -216,13 +290,26 @@ function App() {
         <>
           <MapComponent 
             waypoints={waypoints}
+            trekRoutes={trekRoutes}
             routeCoordinates={routeInfo.coordinates}
             segments={routeInfo.segments}
             onMapClick={handleMapClick}
             onMarkerDrag={handleMarkerDrag}
             searchResult={searchResult}
             isMobile={isMobile}
+            pois={pois}
+            onBoundsChange={setMapBounds}
           />
+
+          <button 
+            className={`poi-search-btn ${isSearchingPOIs ? 'loading' : ''}`}
+            onClick={handleSearchPOIs}
+            disabled={isSearchingPOIs}
+            title="Chercher Camping, Bivouac, Eau..."
+          >
+            {isSearchingPOIs ? <Loader2 className="spinner" size={20} /> : <Search size={20} />}
+            <span>{isSearchingPOIs ? 'Recherche...' : 'Chercher Bivouac'}</span>
+          </button>
 
           <Dashboard 
             distance={routeInfo.distance_km}
@@ -239,13 +326,15 @@ function App() {
             onOpen={() => setDashboardOpen(true)}
             onClose={() => setDashboardOpen(false)}
             onSave={handleSaveRoute}
+            activeTrek={activeTrek}
           />
         </>
       ) : view === 'training' ? (
         <TrainingPlanner />
       ) : (
         <SavedRoutes 
-          onLoadRoute={handleLoadRoute} 
+          onLoadRoute={handleLoadRoute}
+          onCreateTrekStep={handleCreateTrekStep}
           onBack={() => setView('map')} 
         />
       )}

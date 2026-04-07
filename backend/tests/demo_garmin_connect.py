@@ -29,7 +29,6 @@ from typing import Any
 
 import readchar
 import requests
-from garth.exc import GarthException, GarthHTTPError
 
 from garminconnect import (
     Garmin,
@@ -1094,7 +1093,7 @@ def safe_api_call(api_method, *args, method_name: str | None = None, **kwargs):
         result = api_method(*args, **kwargs)
         return True, result, None
 
-    except GarthHTTPError as e:
+    except Exception as e:
         # Handle specific HTTP errors more gracefully
         error_str = str(e)
 
@@ -4148,7 +4147,6 @@ def init_api(email: str | None = None, password: str | None = None) -> Garmin | 
 
     except (
         FileNotFoundError,
-        GarthHTTPError,
         GarminConnectAuthenticationError,
         GarminConnectConnectionError,
     ):
@@ -4178,7 +4176,7 @@ def init_api(email: str | None = None, password: str | None = None) -> Garmin | 
                     garmin.resume_login(result2, mfa_code)
                     print("✅ MFA authentication successful!")
 
-                except GarthHTTPError as garth_error:
+                except Exception as garth_error:
                     # Handle specific HTTP errors from MFA
                     error_str = str(garth_error)
                     print(f"🔍 Debug: MFA error details: {error_str}")
@@ -4217,7 +4215,6 @@ def init_api(email: str | None = None, password: str | None = None) -> Garmin | 
 
         except (
             FileNotFoundError,
-            GarthHTTPError,
             GarthException,
             GarminConnectConnectionError,
             requests.exceptions.HTTPError,

@@ -8,10 +8,14 @@ router = APIRouter(prefix="/api")
 @router.post("/route", response_model=RouteResponse)
 async def calculate_route(request: RouteRequest):
     try:
-        # Use GraphHopper for routing
-        route_data = GraphHopperService.get_route(request.waypoints)
+        if request.provider == "graphhopper":
+            route_data = GraphHopperService.get_route(request.waypoints)
+        else:
+            route_data = IGNService.get_route(request.waypoints)
+            if "elevation_data" not in route_data and route_data.get("coordinates"):
+                route_data["elevation_data"] = IGNService.get_elevation_data(route_data["coordinates"])
 
-        # GraphHopper already calculates elevation gain/loss
+        # GraphHopper already calculates elevation gain/loss, IGN manually fetched it above
         elev_data = route_data.get("elevation_data", {"gain": 0.0, "loss": 0.0, "profile": []})
 
         return RouteResponse(

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, TrendingUp, Compass, ChevronUp, ChevronDown, Trash2, RotateCcw, Info, Clock, X, Save } from 'lucide-react';
+import { Download, TrendingUp, Compass, ChevronUp, ChevronDown, Trash2, RotateCcw, Info, Clock, X, Save, Folder } from 'lucide-react';
 import ElevationChart from './ElevationChart';
 
 const ROAD_TYPE_COLORS = {
@@ -98,7 +98,7 @@ const Dashboard = ({ distance, elevation, elevationLoss, elevationProfile, roadT
         gap: 0
       }}
     >
-      <div className="dashboard-handle" onClick={(e) => { e.stopPropagation(); if (isMobile) onClose(); else setIsExpanded(!isExpanded); }} />
+      <div className="dashboard-handle" onClick={(e) => { e.stopPropagation(); if (isMobile) onClose(); else setIsExpanded(!isExpanded); }} / >
       
       {(isMobile || isExpanded) && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '1.5rem', flexShrink: 0 }}>

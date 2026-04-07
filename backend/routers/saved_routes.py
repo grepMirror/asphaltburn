@@ -25,7 +25,9 @@ async def list_routes():
                         name=data["name"],
                         date=data["date"],
                         distance_km=data["route_data"]["distance_km"],
-                        elevation_gain_m=data["route_data"]["elevation_gain_m"]
+                        elevation_gain_m=data["route_data"]["elevation_gain_m"],
+                        trek_id=data.get("trek_id"),
+                        trek_name=data.get("trek_name")
                     ))
             except Exception as e:
                 print(f"Error reading {filename}: {e}")
@@ -62,3 +64,19 @@ async def delete_route(route_id: str):
     
     os.remove(file_path)
     return {"message": "Route deleted"}
+
+@router.get("/trek/{trek_id}", response_model=list[SavedRoute])
+async def get_trek_routes(trek_id: str):
+    trek_routes = []
+    for filename in os.listdir(STORAGE_DIR):
+        if filename.endswith(".json"):
+            try:
+                with open(os.path.join(STORAGE_DIR, filename), "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if data.get("trek_id") == trek_id:
+                        trek_routes.append(data)
+            except Exception as e:
+                print(f"Error reading {filename}: {e}")
+    # Sort by date
+    trek_routes.sort(key=lambda x: x["date"])
+    return trek_routes

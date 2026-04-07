@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import route, garmin, saved_routes
+from routers import route, garmin, saved_routes, pois
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,6 +21,7 @@ app.add_middleware(
 app.include_router(route.router)
 app.include_router(garmin.router)
 app.include_router(saved_routes.router)
+app.include_router(pois.router)
 
 @app.get("/")
 def read_root():
