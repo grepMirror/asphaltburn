@@ -57,6 +57,17 @@ class GarminClientConnect:
         self.password = password
         # Resolve to absolute path to ensure consistency across different working directories
         self.token_path = Path(token_path).resolve()
+        
+        # Configure User-Agent to avoid 403 Forbidden
+        # Using the desktop UA suggested by the user/discussion
+        garth.client.sess.headers.update({
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/131.0.0.0 Safari/537.36"
+            )
+        })
+        
         self.client = Garmin(email, password)
         self.is_logged_in = False
 
@@ -66,8 +77,10 @@ class GarminClientConnect:
             if self.token_path.exists():
                 try:
                     logger.info(f"Attempting to resume Garmin session from {self.token_path}...")
-                    # garminconnect 0.2.0+ handles token loading via login(path)
-                    self.client.login(str(self.token_path))
+                    # garminconnect handles token loading via login(path)
+                    # or resume(path) if garth is used directly
+                    garth.resume(str(self.token_path))
+                    self.client.login() # This should now use the resumed session
                     self.is_logged_in = True
                     logger.info("Garmin session resumed successfully.")
                     return True
@@ -81,13 +94,11 @@ class GarminClientConnect:
 
             # 2. If load fails or doesn't exist, perform fresh login
             logger.info(f"Performing fresh Garmin login for {self.email}...")
-            # Note: garmin.login() returns (result1, result2) in some versions if return_on_mfa is used,
-            # but here we use the standard call.
             self.client.login()
 
             # 3. Save session to disk for next time
             self.token_path.mkdir(exist_ok=True, parents=True)
-            self.client.garth.dump(str(self.token_path))
+            garth.save(str(self.token_path))
             logger.info(f"New Garmin session saved to {self.token_path}.")
 
             self.is_logged_in = True
