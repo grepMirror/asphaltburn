@@ -305,10 +305,10 @@ function App() {
             className={`poi-search-btn ${isSearchingPOIs ? 'loading' : ''}`}
             onClick={handleSearchPOIs}
             disabled={isSearchingPOIs}
-            title="Chercher Camping, Bivouac, Eau..."
+            title="Chercher Camping, Bivouac, Eau, Toilettes, Magasins..."
           >
             {isSearchingPOIs ? <Loader2 className="spinner" size={20} /> : <Search size={20} />}
-            <span>{isSearchingPOIs ? 'Recherche...' : 'Chercher Bivouac'}</span>
+            <span>{isSearchingPOIs ? 'Recherche...' : 'Services & Bivouac'}</span>
           </button>
 
           <Dashboard 

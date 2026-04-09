@@ -1084,6 +1084,14 @@ h4,
   margin-bottom: 0.75rem;
 }
 
+.poi-add-btn {
+  width: 100%;
+  margin: 0.5rem 0 1rem;
+  padding: 0.5rem !important;
+  font-size: 0.8rem;
+  justify-content: center;
+}
+
 .poi-tags {
   display: flex;
   flex-direction: column;
@@ -1092,6 +1100,40 @@ h4,
   overflow-y: auto;
   border-top: 1px solid var(--surface-dim);
   padding-top: 0.75rem;
+}
+
+/* POI Tooltip Styling */
+.poi-tooltip {
+  background: white !important;
+  border: 1px solid var(--primary) !important;
+  border-radius: 8px !important;
+  padding: 4px 8px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+  font-family: inherit !important;
+}
+
+.poi-tooltip::before {
+  border-top-color: var(--primary) !important;
+}
+
+.poi-tooltip-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.poi-tooltip-content strong {
+  font-size: 0.85rem;
+  color: var(--primary);
+}
+
+.poi-type-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  opacity: 0.8;
 }
 
 /* Mobile adjustments */

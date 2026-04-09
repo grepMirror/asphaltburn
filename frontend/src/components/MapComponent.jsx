@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { LayersControl, WMSTileLayer, MapContainer, TileLayer, Polyline, Marker, CircleMarker, useMapEvents, useMap, Tooltip, Popup } from 'react-leaflet';
-import { Tent, Droplets, Home, Info } from 'lucide-react';
+import { Tent, Droplets, Home, Info, ShoppingCart, Bath } from 'lucide-react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -114,6 +114,8 @@ const getPoiIcon = (type) => {
   if (type === "camping") { color = "#10b981"; Icon = Tent; }
   if (type === "water") { color = "#3b82f6"; Icon = Droplets; }
   if (type === "shelter") { color = "#f59e0b"; Icon = Home; }
+  if (type === "shop") { color = "#8b5cf6"; Icon = ShoppingCart; }
+  if (type === "toilets") { color = "#ef4444"; Icon = Bath; }
 
   const iconHtml = renderToStaticMarkup(
     <div style={{
@@ -228,10 +230,22 @@ const MapComponent = ({ waypoints, trekRoutes, routeCoordinates, segments, onMap
             position={[poi.lat, poi.lon]} 
             icon={getPoiIcon(poi.type)}
           >
+            <Tooltip className="poi-tooltip" direction="top" offset={[0, -10]} opacity={0.9}>
+              <div className="poi-tooltip-content">
+                <strong>{poi.name}</strong>
+                <span className="poi-type-tag">{poi.type}</span>
+              </div>
+            </Tooltip>
             <Popup className="poi-popup">
               <div className="poi-popup-content">
                 <h3>{poi.name}</h3>
                 <span className="poi-badge">{poi.type}</span>
+                <button 
+                  className="poi-add-btn btn-primary btn"
+                  onClick={() => onMapClick({ lat: poi.lat, lng: poi.lon })}
+                >
+                  Ajouter à l'itinéraire
+                </button>
                 <div className="poi-tags">
                   {Object.entries(poi.tags).map(([k, v]) => (
                     k !== 'name' && k !== 'tourism' && k !== 'amenity' && (
