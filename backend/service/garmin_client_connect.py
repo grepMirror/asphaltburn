@@ -1,8 +1,10 @@
 import os
-import garth
+import sys
+import requests
 import logging
 from pathlib import Path
 from datetime import datetime
+from getpass import getpass
 from dataclasses import dataclass
 from garminconnect import (
     Garmin,
@@ -10,7 +12,6 @@ from garminconnect import (
     GarminConnectConnectionError,
     GarminConnectTooManyRequestsError,
 )
-from garth.exc import GarthHTTPError, GarthException
 
 from garminconnect.workout import (
     RunningWorkout,
@@ -52,57 +53,94 @@ class ConditionType:
 # No changes here, just removing the imports that were moved up
 
 class GarminClientConnect:
-    def __init__(self, email: str, password: str, token_path: str = ".garmin_session"):
+    def __init__(self, email: str, password: str, token_path: str = "./.garminconnect"):
         self.email = email
         self.password = password
-        # Resolve to absolute path to ensure consistency across different working directories
-        self.token_path = Path(token_path).resolve()
-        self.client = Garmin(email, password)
+        # Resolve to absolute path and expand ~ to ensure consistency
+        self.token_path = Path(token_path).expanduser().resolve()
+        # Initialize Garmin client. We start without credentials to prefer resuming from tokens.
+        self.client = Garmin()
         self.is_logged_in = False
 
     def login(self) -> bool:
+        """Initialize Garmin API with smart error handling and recovery, exactly as demo_garmin_connect.py."""
+        # First try to login with stored tokens
         try:
-            # 1. Try to load existing session from disk
-            if self.token_path.exists():
-                try:
-                    logger.info(f"Attempting to resume Garmin session from {self.token_path}...")
-                    # garminconnect 0.2.0+ handles token loading via login(path)
-                    self.client.login(str(self.token_path))
-                    self.is_logged_in = True
-                    logger.info("Garmin session resumed successfully.")
-                    return True
-                except (GarminConnectTooManyRequestsError, GarthHTTPError) as e:
-                    if "429" in str(e):
-                        logger.error(f"Rate limited by Garmin (429). Please wait before retrying. Details: {e}")
+            logger.info(f"Attempting to login using stored tokens from: {self.token_path}")
+            self.client = Garmin()
+            self.client.login(str(self.token_path))
+            logger.info("Successfully logged in using stored tokens!")
+            self.is_logged_in = True
+            return True
+
+        except GarminConnectTooManyRequestsError as err:
+            logger.error(f"Rate limited by Garmin: {err}")
+            return False
+
+        except (
+            FileNotFoundError,
+            GarminConnectAuthenticationError,
+            GarminConnectConnectionError,
+        ):
+            logger.info("No valid tokens found or session expired. Requesting fresh login credentials.")
+
+        # Fresh login logic
+        try:
+            logger.info(f"Logging in with credentials for {self.email}...")
+            self.client = Garmin(
+                email=self.email, password=self.password, is_cn=False, return_on_mfa=True
+            )
+            result1, result2 = self.client.login()
+
+            if result1 == "needs_mfa":
+                logger.info("Multi-factor authentication required.")
+
+                # Try to handle MFA if interactive
+                if sys.stdin.isatty():
+                    mfa_code = input("MFA one-time code: ").strip()
+                    logger.info("🔄 Submitting MFA code...")
+                    try:
+                        self.client.resume_login(result2, mfa_code)
+                        logger.info("✅ MFA authentication successful!")
+                    except GarminConnectTooManyRequestsError:
+                        logger.error("❌ Too many MFA attempts. Please wait 30 minutes.")
                         return False
-                    logger.warning(f"Session resumption failed: {e}. Attempting fresh login...")
-                except Exception as e:
-                    logger.warning(f"Session expired or invalid: {e}. Attempting fresh login...")
+                    except GarminConnectAuthenticationError as mfa_error:
+                        logger.error(f"❌ MFA authentication failed: {mfa_error}")
+                        return False
+                else:
+                    logger.error("MFA required but environment is not interactive. Authentication failed.")
+                    return False
 
-            # 2. If load fails or doesn't exist, perform fresh login
-            logger.info(f"Performing fresh Garmin login for {self.email}...")
-            # Note: garmin.login() returns (result1, result2) in some versions if return_on_mfa is used,
-            # but here we use the standard call.
-            self.client.login()
+            # Save tokens for future use (new format)
+            if not self.token_path.exists():
+                self.token_path.mkdir(exist_ok=True, parents=True)
 
-            # 3. Save session to disk for next time
-            self.token_path.mkdir(exist_ok=True, parents=True)
-            self.client.garth.dump(str(self.token_path))
-            logger.info(f"New Garmin session saved to {self.token_path}.")
+            # Use .client.dump() to save the new token format (garmin_tokens.json)
+            self.client.client.dump(str(self.token_path))
+            logger.info(f"Login successful! Tokens saved to: {self.token_path}")
 
             self.is_logged_in = True
             return True
-        except GarminConnectTooManyRequestsError as e:
-            logger.error(f"Garmin rate limit hit during fresh login: {e}")
+
+        except GarminConnectTooManyRequestsError as err:
+            logger.error(f"Too many requests during fresh login: {err}")
             return False
-        except GarthHTTPError as e:
-            if "429" in str(e):
-                logger.error(f"Garmin rate limit hit (429): {e}")
-            else:
-                logger.error(f"Garmin HTTP Error: {e}")
+
+        except GarminConnectAuthenticationError as err:
+            logger.error(f"Authentication error: {err}. Please check credentials.")
             return False
+
+        except (
+            FileNotFoundError,
+            GarminConnectConnectionError,
+            requests.exceptions.HTTPError,
+        ) as err:
+            logger.error(f"Connection/HTTP error during login: {err}")
+            return False
+
         except Exception as e:
-            logger.error(f"Garmin Login failed: {e}")
+            logger.error(f"Unexpected error during login: {e}")
             return False
 
     def upload_workout(self, workout: RunningWorkout) -> dict:

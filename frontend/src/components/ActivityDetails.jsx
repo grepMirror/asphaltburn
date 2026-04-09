@@ -8,7 +8,8 @@ const ActivityDetails = ({ activity, onBack }) => {
   const [details, setDetails] = useState(null);
   const [splits, setSplits] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState(null); // String: 'json', 'llm', or null
+  const [llmSummary, setLlmSummary] = useState(null);
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -16,6 +17,7 @@ const ActivityDetails = ({ activity, onBack }) => {
         const response = await axios.get(`${API_BASE_URL}/api/garmin/activities/${activity.activityId}/details`);
         setDetails(response.data.details);
         setSplits(response.data.splits);
+        setLlmSummary(response.data.llmSummary);
       } catch (err) {
         console.error("Error fetching activity details:", err);
       } finally {
@@ -25,11 +27,41 @@ const ActivityDetails = ({ activity, onBack }) => {
     fetchDetails();
   }, [activity.activityId]);
 
+  const copyToClipboard = (text, type) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCopied(type);
+        setTimeout(() => setCopied(null), 2000);
+      });
+    } else {
+      // Fallback for non-secure contexts (HTTP local network on mobile)
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopied(type);
+        setTimeout(() => setCopied(null), 2000);
+      } catch (err) {
+        console.error('Fallback: Unable to copy', err);
+      }
+      document.body.removeChild(textArea);
+    }
+  };
+
   const handleCopyJSON = () => {
-    if (splits) {
-      navigator.clipboard.writeText(JSON.stringify(splits, null, 2));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+    const dataToCopy = llmSummary ? llmSummary.lapDTOs : splits;
+    copyToClipboard(JSON.stringify(dataToCopy, null, 2), 'json');
+  };
+
+  const handleCopyLLMText = () => {
+    if (llmSummary?.textSummary) {
+        copyToClipboard(llmSummary.textSummary, 'llm');
     }
   };
 
@@ -78,11 +110,18 @@ const ActivityDetails = ({ activity, onBack }) => {
 
     return (
       <div className="splits-table-container">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
           <h3>Intervalles</h3>
-          <button className="btn small" onClick={handleCopyJSON} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.4rem 0.8rem', borderRadius: '0.5rem' }}>
-            <Copy size={14} /> {copied ? "Copié !" : "JSON"}
-          </button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {llmSummary && (
+                <button className="btn small" onClick={handleCopyLLMText} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '0.4rem 0.8rem', borderRadius: '0.5rem', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                    <Zap size={14} /> {copied === 'llm' ? "Prêt pour LLM !" : "Copy for LLM"}
+                </button>
+            )}
+            <button className="btn small" onClick={handleCopyJSON} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.4rem 0.8rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)' }}>
+                <Copy size={14} /> {copied === 'json' ? "Copié !" : (llmSummary ? "Clean JSON" : "JSON")}
+            </button>
+          </div>
         </div>
         <div style={{ overflowX: 'auto' }}>
             <table className="splits-table" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', minWidth: '500px' }}>

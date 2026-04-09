@@ -8,11 +8,11 @@ and error handling patterns for python-garminconnect.
 For a simple getting-started example, see example.py
 
 Dependencies:
-pip3 install garth requests readchar
+pip3 install requests readchar
 
 Environment Variables (optional):
-export EMAIL=<your garmin email address>
-export PASSWORD=<your garmin password>
+export GARMIN_EMAIL=<your garmin email address>
+export GARMIN_PASSWORD=<your garmin password>
 export GARMINTOKENS=<path to token storage>
 """
 
@@ -72,12 +72,9 @@ class Config:
 
     def __init__(self):
         # Load environment variables
-        self.email = os.getenv("EMAIL")
-        self.password = os.getenv("PASSWORD")
+        self.email = os.getenv("GARMIN_EMAIL") or os.getenv("EMAIL")
+        self.password = os.getenv("GARMIN_PASSWORD") or os.getenv("PASSWORD")
         self.tokenstore = os.getenv("GARMINTOKENS") or "~/.garminconnect"
-        self.tokenstore_base64 = (
-            os.getenv("GARMINTOKENS_BASE64") or "~/.garminconnect_base64"
-        )
 
         # Date settings
         self.today = datetime.date.today()
@@ -1093,7 +1090,7 @@ def safe_api_call(api_method, *args, method_name: str | None = None, **kwargs):
         result = api_method(*args, **kwargs)
         return True, result, None
 
-    except Exception as e:
+    except GarminConnectConnectionError as e:
         # Handle specific HTTP errors more gracefully
         error_str = str(e)
 
@@ -1144,7 +1141,7 @@ def safe_api_call(api_method, *args, method_name: str | None = None, **kwargs):
         print(f"⚠️ {method_name} failed: {error_msg}")
         return False, None, error_msg
 
-    except GarminConnectConnectionError as e:
+    except GarminConnectConnectionError as e:  # noqa: B025
         error_str = str(e)
         # Extract a clean message by detecting common HTTP status codes
         if "410" in error_str:
@@ -2512,6 +2509,81 @@ def get_scheduled_workout_by_id_data(api: Garmin) -> None:
         print(f"❌ Error getting scheduled workout by ID: {e}")
 
 
+def delete_workout_data(api: Garmin) -> None:
+    """Delete a workout template from the library."""
+    try:
+        workouts = api.get_workouts()
+        if not workouts:
+            print("ℹ️ No workouts found")
+            return
+
+        print("\nAvailable workouts (most recent):")
+        for i, workout in enumerate(workouts[:10]):
+            workout_id = workout.get("workoutId")
+            workout_name = workout.get("workoutName", "Unknown")
+            print(f"  [{i}] {workout_name} (ID: {workout_id})")
+
+        try:
+            index_input = input(
+                f"\nEnter workout index to delete (0-{min(9, len(workouts) - 1)}, or 'q' to cancel): "
+            ).strip()
+
+            if index_input.lower() == "q":
+                print("❌ Cancelled")
+                return
+
+            workout_index = int(index_input)
+            if not (0 <= workout_index < min(10, len(workouts))):
+                print("❌ Invalid index")
+                return
+
+            selected_workout = workouts[workout_index]
+            workout_id = selected_workout["workoutId"]
+            workout_name = selected_workout.get("workoutName", "Unknown")
+
+            confirm = input(
+                f"Delete '{workout_name}' (ID: {workout_id})? (y/N): "
+            ).strip()
+            if confirm.lower() != "y":
+                print("❌ Cancelled")
+                return
+
+            call_and_display(
+                api.delete_workout,
+                workout_id,
+                method_name="delete_workout",
+                api_call_desc=f"api.delete_workout({workout_id}) - {workout_name}",
+            )
+            print("✅ Workout deleted successfully!")
+
+        except ValueError:
+            print("❌ Invalid input")
+
+    except Exception as e:
+        print(f"❌ Error deleting workout: {e}")
+
+
+def unschedule_workout_data(api: Garmin) -> None:
+    """Remove a scheduled workout from the calendar."""
+    try:
+        scheduled_id = input("Enter scheduled workout ID to unschedule: ").strip()
+
+        if not scheduled_id:
+            print("❌ Scheduled workout ID is required")
+            return
+
+        call_and_display(
+            api.unschedule_workout,
+            scheduled_id,
+            method_name="unschedule_workout",
+            api_call_desc=f"api.unschedule_workout({scheduled_id})",
+        )
+        print("✅ Workout unscheduled successfully!")
+
+    except Exception as e:
+        print(f"❌ Error unscheduling workout: {e}")
+
+
 def set_body_composition_data(api: Garmin) -> None:
     """Set body composition data."""
     try:
@@ -3424,16 +3496,16 @@ def get_virtual_challenges_data(api: Garmin) -> None:
     # that don't have virtual challenges enabled, so handle it quietly
     try:
         challenges = api.get_inprogress_virtual_challenges(
-            config.start, config.default_limit
+            config.start_badge, config.default_limit
         )
         if challenges:
             print("✅ Virtual challenges data retrieved successfully")
             call_and_display(
                 api.get_inprogress_virtual_challenges,
-                config.start,
+                config.start_badge,
                 config.default_limit,
                 method_name="get_inprogress_virtual_challenges",
-                api_call_desc=f"api.get_inprogress_virtual_challenges({config.start}, {config.default_limit})",
+                api_call_desc=f"api.get_inprogress_virtual_challenges({config.start_badge}, {config.default_limit})",
             )
             return
         print("ℹ️ No in-progress virtual challenges found")
@@ -3864,6 +3936,8 @@ def execute_api_call(api: Garmin, key: str) -> None:
                 api
             ),
             "scheduled_workout": lambda: schedule_workout_data(api),
+            "delete_workout": lambda: delete_workout_data(api),
+            "unschedule_workout": lambda: unschedule_workout_data(api),
             "count_activities": lambda: call_and_display(
                 api.count_activities,
                 method_name="count_activities",
@@ -4145,6 +4219,10 @@ def init_api(email: str | None = None, password: str | None = None) -> Garmin | 
         print("Successfully logged in using stored tokens!")
         return garmin
 
+    except GarminConnectTooManyRequestsError as err:
+        print(f"\n❌ {err}")
+        sys.exit(1)
+
     except (
         FileNotFoundError,
         GarminConnectAuthenticationError,
@@ -4176,37 +4254,34 @@ def init_api(email: str | None = None, password: str | None = None) -> Garmin | 
                     garmin.resume_login(result2, mfa_code)
                     print("✅ MFA authentication successful!")
 
-                except Exception as garth_error:
-                    # Handle specific HTTP errors from MFA
-                    error_str = str(garth_error)
+                except GarminConnectTooManyRequestsError:
+                    print("❌ Too many MFA attempts")
+                    print("💡 Please wait 30 minutes before trying again")
+                    sys.exit(1)
+                except GarminConnectAuthenticationError as mfa_error:
+                    # Handle specific errors from MFA
+                    error_str = str(mfa_error)
                     print(f"🔍 Debug: MFA error details: {error_str}")
-
-                    if "429" in error_str and "Too Many Requests" in error_str:
-                        print("❌ Too many MFA attempts")
-                        print("💡 Please wait 30 minutes before trying again")
-                        sys.exit(1)
-                    elif "401" in error_str or "403" in error_str:
+                    if "401" in error_str or "403" in error_str:
                         print("❌ Invalid MFA code")
                         print("💡 Please verify your MFA code and try again")
                         continue
-                    else:
-                        # Other HTTP errors - don't retry
-                        print(f"❌ MFA authentication failed: {garth_error}")
-                        sys.exit(1)
-
-                except GarthException as garth_error:
-                    print(f"❌ MFA authentication failed: {garth_error}")
-                    print("💡 Please verify your MFA code and try again")
-                    continue
+                    # Other HTTP errors - don't retry
+                    print(f"❌ MFA authentication failed: {mfa_error}")
+                    sys.exit(1)
 
             # Save tokens for future use
-            garmin.garth.dump(config.tokenstore)
+            garmin.client.dump(config.tokenstore)
             print(f"Login successful! Tokens saved to: {config.tokenstore}")
 
             return garmin
 
-        except GarminConnectAuthenticationError:
-            print("❌ Authentication failed:")
+        except GarminConnectTooManyRequestsError as err:
+            print(f"\n❌ {err}")
+            sys.exit(1)
+
+        except GarminConnectAuthenticationError as err:
+            print(f"\n❌ {err}")
             print("💡 Please check your username and password and try again")
             # Clear the provided credentials to force re-entry
             email = None
@@ -4215,7 +4290,6 @@ def init_api(email: str | None = None, password: str | None = None) -> Garmin | 
 
         except (
             FileNotFoundError,
-            GarthException,
             GarminConnectConnectionError,
             requests.exceptions.HTTPError,
         ) as err:

@@ -27,3 +27,4 @@ map_data
 *.sln
 *.sw?
 ssh_key
+.garminconnect
