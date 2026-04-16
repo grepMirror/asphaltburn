@@ -10,6 +10,7 @@ const ActivityDetails = ({ activity, onBack }) => {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(null); // String: 'json', 'llm', or null
   const [llmSummary, setLlmSummary] = useState(null);
+  const [intervalFilter, setIntervalFilter] = useState('all'); // 'all', 'active', 'rest'
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -94,9 +95,51 @@ const ActivityDetails = ({ activity, onBack }) => {
     }
   }
 
+  // Helper to determine if an interval is active or rest
+  const getIntervalType = (lap) => {
+    const isSwim = activity?.activityType?.typeKey?.includes('swim');
+    
+    if (isSwim) {
+      // For swimming, distance 0 is definitely REST
+      return ((lap.distance || 0) > 0 || (lap.numberOfActiveLengths || 0) > 0) ? 'active' : 'rest';
+    }
+    
+    // For running/cycling, check intensityType if available (0 is usually ACTIVE)
+    if (lap.intensityType === 'RESTING' || lap.intensityType === 1) return 'rest';
+    if (lap.intensityType === 'ACTIVE' || lap.intensityType === 0) return 'active';
+    
+    // Fallback: if distance is extremely small or speed is near zero
+    if ((lap.distance || 0) < 5 && (lap.duration || 0) > 10) return 'rest';
+    
+    return 'active';
+  };
+
+  const getFilteredLaps = (laps) => {
+    if (intervalFilter === 'all') return laps;
+    return laps.filter(lap => getIntervalType(lap) === intervalFilter);
+  };
+
+  const calculateIntervalStats = (laps) => {
+    let activeTime = 0;
+    let restTime = 0;
+    let activeDist = 0;
+
+    laps.forEach(lap => {
+      const type = getIntervalType(lap);
+      if (type === 'active') {
+        activeTime += (lap.duration || 0);
+        activeDist += (lap.distance || 0);
+      } else {
+        restTime += (lap.duration || 0);
+      }
+    });
+
+    return { activeTime, restTime, activeDist };
+  };
+
   // Splits parsing
   const renderSplits = () => {
-    // Garmin sometimes returns splits directly as an array, or nested in lapDTOs
+    const isSwim = activity?.activityType?.typeKey?.includes('swim');
     const laps = Array.isArray(splits) ? splits : (splits?.lapDTOs || []);
     
     if (!laps || laps.length === 0) {
@@ -108,53 +151,99 @@ const ActivityDetails = ({ activity, onBack }) => {
       );
     }
 
+    const filteredLaps = getFilteredLaps(laps);
+    const { activeTime, restTime, activeDist } = calculateIntervalStats(laps);
+
+    const formatTime = (sec) => {
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${m}:${s.toString().padStart(2, '0')}`;
+    };
+
     return (
       <div className="splits-table-container">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-          <h3>Intervalles</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div>
+            <h3 style={{ marginBottom: '0.5rem' }}>Intervalles</h3>
+            <div className="filter-tabs">
+                <button className={`filter-tab ${intervalFilter === 'all' ? 'active' : ''}`} onClick={() => setIntervalFilter('all')}>Tous</button>
+                <button className={`filter-tab ${intervalFilter === 'active' ? 'active' : ''}`} onClick={() => setIntervalFilter('active')}>Actifs</button>
+                <button className={`filter-tab ${intervalFilter === 'rest' ? 'active' : ''}`} onClick={() => setIntervalFilter('rest')}>Repos</button>
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             {llmSummary && (
                 <button className="btn small" onClick={handleCopyLLMText} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '0.4rem 0.8rem', borderRadius: '0.5rem', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
-                    <Zap size={14} /> {copied === 'llm' ? "Prêt pour LLM !" : "Copy for LLM"}
+                    <Zap size={14} /> {copied === 'llm' ? "Prêt !" : "Copy for LLM"}
                 </button>
             )}
             <button className="btn small" onClick={handleCopyJSON} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.4rem 0.8rem', borderRadius: '0.5rem', border: '1px solid var(--glass-border)' }}>
-                <Copy size={14} /> {copied === 'json' ? "Copié !" : (llmSummary ? "Clean JSON" : "JSON")}
+                <Copy size={14} /> {copied === 'json' ? "Copié !" : "JSON"}
             </button>
           </div>
         </div>
+
+        <div className="interval-summary-bar">
+            <div className="summary-stat">
+                <span className="label">Temps Actif</span>
+                <span className="value" style={{ color: '#10b981' }}>{formatTime(activeTime)}</span>
+            </div>
+            <div className="summary-stat">
+                <span className="label">Temps de Repos</span>
+                <span className="value" style={{ color: '#64748b' }}>{formatTime(restTime)}</span>
+            </div>
+            <div className="summary-stat">
+                <span className="label">Distance Active</span>
+                <span className="value">{(activeDist/1000).toFixed(2)} km</span>
+            </div>
+        </div>
+
         <div style={{ overflowX: 'auto' }}>
-            <table className="splits-table" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', minWidth: '500px' }}>
+            <table className="splits-table" style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse', minWidth: '600px' }}>
             <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                <th style={{ padding: '0.8rem 0.5rem', color: 'var(--text-secondary)' }}>Intervalle</th>
+                <th style={{ padding: '0.8rem 0.5rem', color: 'var(--text-secondary)' }}>#</th>
+                <th style={{ padding: '0.8rem 0.5rem', color: 'var(--text-secondary)' }}>Type</th>
                 <th style={{ padding: '0.8rem 0.5rem', color: 'var(--text-secondary)' }}>Temps</th>
                 <th style={{ padding: '0.8rem 0.5rem', color: 'var(--text-secondary)' }}>Distance</th>
-                <th style={{ padding: '0.8rem 0.5rem', color: 'var(--text-secondary)' }}>Allure</th>
+                <th style={{ padding: '0.8rem 0.5rem', color: 'var(--text-secondary)' }}>{isSwim ? "Allure /100m" : "Allure /km"}</th>
+                {isSwim && <th style={{ padding: '0.8rem 0.5rem', color: 'var(--text-secondary)' }}>SWOLF</th>}
                 <th style={{ padding: '0.8rem 0.5rem', color: 'var(--text-secondary)' }}>FC Moy.</th>
                 </tr>
             </thead>
             <tbody>
-                {laps.map((lap, index) => {
+                {filteredLaps.map((lap, index) => {
+                const type = getIntervalType(lap);
                 const lapDur = lap.duration || 0;
                 const lapDist = lap.distance || 0;
-                const durMins = Math.floor(lapDur / 60);
-                const durSecs = Math.floor(lapDur % 60);
-                const distKm = lapDist / 1000;
-                const distDist = distKm.toFixed(2);
                 
-                // Avoid division by zero
-                const paceMinsFull = distKm > 0 ? (lapDur / 60) / distKm : 0;
-                const paceMins = Math.floor(paceMinsFull);
-                const paceSecs = Math.floor((paceMinsFull - paceMins) * 60);
+                // Pace Calculation
+                let paceDisplay = "-";
+                if (lapDist > 0) {
+                    if (isSwim) {
+                        const pace100m = (lapDur / (lapDist / 100));
+                        paceDisplay = formatTime(pace100m);
+                    } else {
+                        const paceKm = (lapDur / 60) / (lapDist / 1000);
+                        const pm = Math.floor(paceKm);
+                        const ps = Math.floor((paceKm - pm) * 60);
+                        paceDisplay = `${pm}:${ps.toString().padStart(2, '0')}`;
+                    }
+                }
                 
                 return (
-                    <tr key={lap.lapIndex || index} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '0.8rem 0.5rem' }}>{index + 1}</td>
-                    <td style={{ padding: '0.8rem 0.5rem', fontWeight: 'bold' }}>{`${durMins}:${durSecs.toString().padStart(2, '0')}`}</td>
-                    <td style={{ padding: '0.8rem 0.5rem' }}>{distDist} km</td>
-                    <td style={{ padding: '0.8rem 0.5rem' }}>{distKm === 0 ? "-" : `${paceMins}:${paceSecs.toString().padStart(2, '0')}`}</td>
-                    <td style={{ padding: '0.8rem 0.5rem' }}>{Math.round(lap.averageHR || 0)}</td>
+                    <tr key={lap.lapIndex || index} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', opacity: type === 'rest' ? 0.7 : 1 }}>
+                    <td style={{ padding: '0.8rem 0.5rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{lap.lapIndex !== undefined ? lap.lapIndex + 1 : index + 1}</td>
+                    <td style={{ padding: '0.8rem 0.5rem' }}>
+                        <span className={`badge ${type === 'active' ? 'badge-active' : 'badge-rest'}`}>
+                            {type === 'active' ? 'Actif' : 'Repos'}
+                        </span>
+                    </td>
+                    <td style={{ padding: '0.8rem 0.5rem', fontWeight: 'bold' }}>{formatTime(lapDur)}</td>
+                    <td style={{ padding: '0.8rem 0.5rem' }}>{lapDist > 0 ? (lapDist/1000).toFixed(2) + " km" : "-"}</td>
+                    <td style={{ padding: '0.8rem 0.5rem' }}>{paceDisplay}</td>
+                    {isSwim && <td style={{ padding: '0.8rem 0.5rem' }}>{lap.averageSWOLF || "-"}</td>}
+                    <td style={{ padding: '0.8rem 0.5rem' }}>{Math.round(lap.averageHR || 0)} <small style={{ opacity: 0.5 }}>bpm</small></td>
                     </tr>
                 )
                 })}

@@ -114,8 +114,8 @@ def summarize_swim_activity(details, splits):
     text_summary = f"Swim Workout Summary (ID: {details.get('activityId')})\n"
     text_summary += "="*30 + "\n"
     for lap in compact_laps:
-        dist = lap.get('distance', 0)
-        dur = lap.get('duration', 0)
+        dist = (lap.get('distance') or 0)
+        dur = (lap.get('duration') or 0)
         idx = lap.get('lapIndex', '?')
         
         if dist > 0:
@@ -123,25 +123,25 @@ def summarize_swim_activity(details, splits):
             pace_total_sec = (dur / (dist / 100)) if dist > 0 else 0
             pm = int(pace_total_sec // 60)
             ps = int(pace_total_sec % 60)
-            text_summary += f"Set {idx}: {int(dist)}m | {int(dur//60)}:{int(dur%60):02d} | Pace: {pm}:{ps:02d}/100m | AvgHR: {lap.get('averageHR')} | SWOLF: {lap.get('averageSWOLF')}\n"
+            text_summary += f"Set {idx}: {int(dist)}m | {int(dur//60)}:{int(dur%60):02d} | Pace: {pm}:{ps:02d}/100m | AvgHR: {lap.get('averageHR') or '?'} | SWOLF: {lap.get('averageSWOLF') or '?'}\n"
             
             # Print individual lengths
             length_dtos = lap.get('lengthDTOs', [])
             if length_dtos:
                 for length in length_dtos:
-                    l_dist = length.get('distance', 0)
-                    l_dur = length.get('duration', 0)
+                    l_dist = (length.get('distance') or 0)
+                    l_dur = (length.get('duration') or 0)
                     if l_dist > 0:
                         l_pace_sec = (l_dur / (l_dist / 100))
                         l_pm = int(l_pace_sec // 60)
                         l_ps = int(l_pace_sec % 60)
-                        strokes = length.get('totalNumberOfStrokes', "?")
-                        hr = length.get('averageHR', "?")
-                        stroke_type = length.get('swimStroke', "UNKNOWN")
+                        strokes = length.get('totalNumberOfStrokes') or "?"
+                        hr = length.get('averageHR') or "?"
+                        stroke_type = length.get('swimStroke') or "UNKNOWN"
                         # Format clearly
                         text_summary += f"  - Length ({l_dist}m) | Time: {l_dur:.1f}s | Pace: {l_pm}:{l_ps:02d}/100m | HR: {hr} | Strokes: {strokes} | Stroke: {stroke_type}\n"
         else:
-            text_summary += f"REST: {int(dur//60)}:{int(dur%60):02d} (HR: {lap.get('averageHR', '?')})\n"
+            text_summary += f"REST: {int(dur//60)}:{int(dur%60):02d} (HR: {lap.get('averageHR') or '?'})\n"
             
     return {
         "activityId": details.get("activityId"),
