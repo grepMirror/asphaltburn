@@ -1,21 +1,34 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Upload, Download, X, Calendar, Map as MapIcon, RotateCcw, List } from 'lucide-react';
+import { Search, Upload, Download, X, Calendar, Map as MapIcon, RotateCcw, List, Menu } from 'lucide-react';
 import SearchBar from './SearchBar';
+
+const useIsMobile = () => {
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth <= 768);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  return isMobile;
+};
 
 const TopRightMenu = ({ onCitySelect, onExport, onImport, onUndo, waypointsCount, currentView, onViewChange }) => {
   const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileExpanded, setMobileExpanded] = useState(false);
   const fileInputRef = useRef(null);
   const menuRef = useRef(null);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         if (searchOpen) setSearchOpen(false);
+        if (mobileExpanded) setMobileExpanded(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [searchOpen]);
+  }, [searchOpen, mobileExpanded]);
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
@@ -24,6 +37,93 @@ const TopRightMenu = ({ onCitySelect, onExport, onImport, onUndo, waypointsCount
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
+
+  const handleMobileAction = (action) => {
+    action();
+    setMobileExpanded(false);
+  };
+
+  if (isMobile) {
+    return (
+      <div className="top-right-menu glass-panel top-right-menu--mobile" ref={menuRef}>
+        {searchOpen ? (
+          <div className="search-row-mobile">
+            <SearchBar onCitySelect={(city) => { onCitySelect(city); setSearchOpen(false); }} />
+            <button className="icon-btn small" onClick={() => setSearchOpen(false)} title="Fermer">
+              <X size={18} />
+            </button>
+          </div>
+        ) : (
+          <>
+            <button className="icon-btn" onClick={() => setSearchOpen(true)} title="Rechercher">
+              <Search size={20} />
+            </button>
+            <button
+              className="icon-btn"
+              onClick={(e) => { e.stopPropagation(); onUndo(); }}
+              disabled={waypointsCount === 0}
+              title="Annuler"
+            >
+              <RotateCcw size={18} />
+            </button>
+            <button
+              className={`icon-btn ${mobileExpanded ? 'active' : ''}`}
+              onClick={() => setMobileExpanded(!mobileExpanded)}
+              title="Menu"
+            >
+              {mobileExpanded ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          </>
+        )}
+
+        {mobileExpanded && !searchOpen && (
+          <div className="mobile-menu-dropdown glass-panel">
+            <button
+              className={`mobile-menu-item ${currentView === 'map' ? 'active' : ''}`}
+              onClick={() => handleMobileAction(() => onViewChange('map'))}
+            >
+              <MapIcon size={18} />
+              <span>Carte</span>
+            </button>
+            <button
+              className={`mobile-menu-item ${currentView === 'training' || currentView === 'acwr' ? 'active' : ''}`}
+              onClick={() => handleMobileAction(() => onViewChange('training'))}
+            >
+              <Calendar size={18} />
+              <span>Entraînement</span>
+            </button>
+            <button
+              className={`mobile-menu-item ${currentView === 'saved' ? 'active' : ''}`}
+              onClick={() => handleMobileAction(() => onViewChange('saved'))}
+            >
+              <List size={18} />
+              <span>Itinéraires</span>
+            </button>
+
+            <div className="mobile-menu-divider" />
+
+            <button
+              className="mobile-menu-item"
+              onClick={() => { setMobileExpanded(false); fileInputRef.current?.click(); }}
+            >
+              <Upload size={18} />
+              <span>Importer GPX</span>
+            </button>
+            <button
+              className="mobile-menu-item"
+              onClick={() => handleMobileAction(onExport)}
+              disabled={waypointsCount < 2}
+            >
+              <Download size={18} />
+              <span>Exporter GPX</span>
+            </button>
+          </div>
+        )}
+
+        <input type="file" accept=".gpx" ref={fileInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
+      </div>
+    );
+  }
 
   return (
     <div className="top-right-menu glass-panel" ref={menuRef}>

@@ -82,6 +82,7 @@ function App() {
   const [mapBounds, setMapBounds] = useState(null);
   const [showPinPrompt, setShowPinPrompt] = useState(false);
   const [pendingSaveAfterPin, setPendingSaveAfterPin] = useState(false);
+  const [insertMode, setInsertMode] = useState(null); // null or { afterIndex: number }
 
   const isMobile = useIsMobile();
 
@@ -184,8 +185,24 @@ function App() {
 
   const handleMapClick = (latlng) => {
     setRouteError(null);
-    setWaypoints([...waypoints, { lat: latlng.lat, lng: latlng.lng }]);
     setSearchResult(null);
+    if (insertMode !== null) {
+      const newWaypoints = [...waypoints];
+      const insertAt = insertMode.afterIndex + 1;
+      newWaypoints.splice(insertAt, 0, { lat: latlng.lat, lng: latlng.lng });
+      setWaypoints(newWaypoints);
+      setInsertMode({ afterIndex: insertAt, originIndex: insertMode.originIndex });
+    } else {
+      setWaypoints([...waypoints, { lat: latlng.lat, lng: latlng.lng }]);
+    }
+  };
+
+  const handleMarkerClick = (index) => {
+    setInsertMode({ afterIndex: index, originIndex: index });
+  };
+
+  const handleExitInsertMode = () => {
+    setInsertMode(null);
   };
 
   const handleMarkerDrag = (index, newLatlng) => {
@@ -199,7 +216,17 @@ function App() {
   };
 
   const handleUndo = () => {
-    setWaypoints(waypoints.slice(0, -1));
+    if (waypoints.length === 0) return;
+
+    if (insertMode !== null && insertMode.afterIndex !== insertMode.originIndex) {
+      const newWaypoints = [...waypoints];
+      newWaypoints.splice(insertMode.afterIndex, 1);
+      setWaypoints(newWaypoints);
+      setInsertMode({ afterIndex: insertMode.afterIndex - 1, originIndex: insertMode.originIndex });
+    } else {
+      setWaypoints(waypoints.slice(0, -1));
+      setInsertMode(null);
+    }
   };
 
   const handleReset = () => {
@@ -207,6 +234,7 @@ function App() {
     setTrekRoutes([]);
     setActiveTrek(null);
     setRouteError(null);
+    setInsertMode(null);
   };
 
   const handleExportGPX = async () => {
@@ -400,10 +428,19 @@ function App() {
             segments={routeInfo.segments}
             onMapClick={handleMapClick}
             onMarkerDrag={handleMarkerDrag}
+            onMarkerClick={handleMarkerClick}
             searchResult={searchResult}
             isMobile={isMobile}
             onBoundsChange={setMapBounds}
+            insertMode={insertMode}
           />
+
+          {insertMode !== null && (
+            <div className="insert-mode-badge glass-panel" onClick={handleExitInsertMode}>
+              <span>Mode insertion</span>
+              <X size={16} />
+            </div>
+          )}
 
           <Dashboard 
             distance={routeInfo.distance_km}
@@ -424,16 +461,20 @@ function App() {
             elevationLoading={isElevationLoading}
           />
         </>
-      ) : view === 'training' ? (
-        <TrainingPlanner onOpenAcwrCharts={() => setView('acwr')} />
-      ) : view === 'acwr' ? (
-        <AcwrChartsPage onBack={() => setView('training')} />
       ) : (
-        <SavedRoutes 
-          onLoadRoute={handleLoadRoute}
-          onCreateTrekStep={handleCreateTrekStep}
-          onBack={() => setView('map')} 
-        />
+        <div className="app-page">
+          {view === 'training' ? (
+            <TrainingPlanner onOpenAcwrCharts={() => setView('acwr')} />
+          ) : view === 'acwr' ? (
+            <AcwrChartsPage onBack={() => setView('training')} />
+          ) : (
+            <SavedRoutes 
+              onLoadRoute={handleLoadRoute}
+              onCreateTrekStep={handleCreateTrekStep}
+              onBack={() => setView('map')} 
+            />
+          )}
+        </div>
       )}
 
       {isLoading && (

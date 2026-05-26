@@ -17,8 +17,6 @@ const CompassButton = () => {
   }, []);
 
   const handleOrientation = useCallback((event) => {
-    // Alpha: compass heading (0=North, 90=East, etc.)
-    // On iOS, webkitCompassHeading is more reliable
     const compassHeading = event.webkitCompassHeading != null
       ? event.webkitCompassHeading
       : event.alpha != null ? (360 - event.alpha) % 360 : null;
@@ -28,18 +26,24 @@ const CompassButton = () => {
     headingRef.current = compassHeading;
     setHeading(compassHeading);
 
-    // Rotate map container
-    const container = map.getContainer();
-    container.style.transformOrigin = 'center center';
-    container.style.transform = `rotate(${-compassHeading}deg)`;
-    // Invalidate size so tiles don't misalign
-    map.invalidateSize();
+    try {
+      const container = map.getContainer();
+      container.style.transformOrigin = 'center center';
+      container.style.transform = `rotate(${-compassHeading}deg)`;
+      map.invalidateSize();
+    } catch {
+      // Map container may already be removed from DOM
+    }
   }, [map]);
 
   const resetRotation = useCallback(() => {
-    const container = map.getContainer();
-    container.style.transform = '';
-    map.invalidateSize();
+    try {
+      const container = map.getContainer();
+      container.style.transform = '';
+      map.invalidateSize();
+    } catch {
+      // Map container may already be removed from DOM during unmount
+    }
   }, [map]);
 
   const toggle = async (e) => {

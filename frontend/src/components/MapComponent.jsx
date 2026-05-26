@@ -30,9 +30,10 @@ let DefaultIcon = L.icon({
 L.Marker.prototype.options.icon = DefaultIcon;
 
 // Custom icon logic for numbered markers
-const createNumberedIcon = (number) => {
+const createNumberedIcon = (number, active = false) => {
+  const cls = active ? 'numbered-marker insert-active' : 'numbered-marker';
   return L.divIcon({
-    className: 'numbered-marker',
+    className: cls,
     html: `<div class="marker-pin"></div><span>${number}</span>`,
     iconSize: [30, 42],
     iconAnchor: [15, 42]
@@ -105,7 +106,7 @@ const getKmMarkers = (coords) => {
 };
 
 
-const MapComponent = ({ waypoints, trekRoutes, routeCoordinates, segments, onMapClick, onMarkerDrag, searchResult, isMobile, onBoundsChange }) => {
+const MapComponent = ({ waypoints, trekRoutes, routeCoordinates, segments, onMapClick, onMarkerDrag, onMarkerClick, searchResult, isMobile, onBoundsChange, insertMode }) => {
   const kmMarkers = getKmMarkers(routeCoordinates);
 
   return (
@@ -131,6 +132,14 @@ const MapComponent = ({ waypoints, trekRoutes, routeCoordinates, segments, onMap
               maxZoom={17}
             />
           </LayersControl.BaseLayer> */}
+
+          <LayersControl.BaseLayer name="Satellite">
+            <TileLayer
+              attribution='&copy; <a href="https://www.esri.com/">Esri</a>'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
+            />
+          </LayersControl.BaseLayer>
 
           <LayersControl.BaseLayer name="IGN Plan V2 (France)">
             <TileLayer
@@ -162,22 +171,29 @@ const MapComponent = ({ waypoints, trekRoutes, routeCoordinates, segments, onMap
           </>
         )}
 
-        {waypoints.map((wp, idx) => (
-          <Marker
-            key={idx}
-            position={[wp.lat, wp.lng]}
-            icon={createNumberedIcon(idx + 1)}
-            draggable={true}
-            zIndexOffset={1000}
-            eventHandlers={{
-              dragend: (e) => {
-                const marker = e.target;
-                const position = marker.getLatLng();
-                onMarkerDrag(idx, position);
-              },
-            }}
-          />
-        ))}
+        {waypoints.map((wp, idx) => {
+          const isActive = insertMode !== null && insertMode.afterIndex === idx;
+          return (
+            <Marker
+              key={idx}
+              position={[wp.lat, wp.lng]}
+              icon={createNumberedIcon(idx + 1, isActive)}
+              draggable={true}
+              zIndexOffset={1000}
+              eventHandlers={{
+                click: (e) => {
+                  L.DomEvent.stopPropagation(e);
+                  onMarkerClick?.(idx);
+                },
+                dragend: (e) => {
+                  const marker = e.target;
+                  const position = marker.getLatLng();
+                  onMarkerDrag(idx, position);
+                },
+              }}
+            />
+          );
+        })}
 
         {kmMarkers.map((m, idx) => (
           <Marker
