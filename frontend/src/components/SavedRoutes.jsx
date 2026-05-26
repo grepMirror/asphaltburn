@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
-import { Trash2, MapPin, Calendar, ArrowRight, Loader, X, Folder, ChevronRight, ChevronDown, Plus } from 'lucide-react';
+import { Trash2, MapPin, Calendar, ArrowRight, Loader, X, Folder, ChevronRight, ChevronDown, Plus, Archive, Share2 } from 'lucide-react';
+import { downloadBlob, shareFilesOrDownloadFirst } from '../utils/shareExport';
 
 const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
   const [routes, setRoutes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [expandedTreks, setExpandedTreks] = useState({});
+  const [trekZipBusyId, setTrekZipBusyId] = useState(null);
 
   useEffect(() => {
     fetchRoutes();
@@ -57,6 +59,51 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
     }));
   };
 
+  const slugBase = (name) => {
+    const s = String(name || 'trek').replace(/[^\w\-]+/g, '_').replace(/^_|_$/g, '');
+    return (s || 'trek').slice(0, 32);
+  };
+
+  const fetchTrekZipBlob = async (trekId) => {
+    const res = await axios.get(`${API_BASE_URL}/api/saved-routes/trek/${trekId}/export-gpx-zip`, {
+      responseType: 'blob',
+    });
+    return res.data;
+  };
+
+  const handleDownloadTrekZip = async (e, trek) => {
+    e.stopPropagation();
+    setTrekZipBusyId(trek.id);
+    try {
+      const blob = await fetchTrekZipBlob(trek.id);
+      downloadBlob(blob, `${slugBase(trek.name)}-etapes.zip`);
+    } catch (err) {
+      console.error(err);
+      alert('Impossible de générer le ZIP du trek.');
+    } finally {
+      setTrekZipBusyId(null);
+    }
+  };
+
+  const handleShareTrekZip = async (e, trek) => {
+    e.stopPropagation();
+    setTrekZipBusyId(trek.id);
+    try {
+      const blob = await fetchTrekZipBlob(trek.id);
+      const fname = `${slugBase(trek.name)}-etapes.zip`;
+      const file = new File([blob], fname, { type: 'application/zip' });
+      await shareFilesOrDownloadFirst([file], { title: fname });
+    } catch (err) {
+      if (err?.name === 'AbortError') {
+        return;
+      }
+      console.error(err);
+      alert('Impossible de partager le ZIP du trek.');
+    } finally {
+      setTrekZipBusyId(null);
+    }
+  };
+
   // Group routes by trek
   const groupedRoutes = routes.reduce((acc, route) => {
     if (route.trek_id) {
@@ -75,9 +122,19 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
   }, { treks: {}, standalone: [] });
 
   // Sort trek routes by date (earliest first, as steps)
-  Object.values(groupedRoutes.treks).forEach(trek => {
+  Object.values(groupedRoutes.treks).forEach((trek) => {
     trek.routes.sort((a, b) => new Date(a.date) - new Date(b.date));
   });
+
+  const trekCumulativeTotals = (trekRoutes) => {
+    let distanceKm = 0;
+    let elevationGainM = 0;
+    for (const r of trekRoutes) {
+      distanceKm += Number(r.distance_km) || 0;
+      elevationGainM += Number(r.elevation_gain_m) || 0;
+    }
+    return { distanceKm, elevationGainM };
+  };
 
   return (
     <div className="saved-routes-container glass-panel">
@@ -107,7 +164,9 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
       ) : (
         <div className="routes-list">
           {/* Render Treks */}
-          {Object.values(groupedRoutes.treks).map(trek => (
+          {Object.values(groupedRoutes.treks).map((trek) => {
+            const totals = trekCumulativeTotals(trek.routes);
+            return (
             <div key={trek.id} className="trek-group">
               <div 
                 className={`trek-folder glass-panel ${expandedTreks[trek.id] ? 'expanded' : ''}`}
@@ -117,10 +176,34 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
                   <Folder size={20} className="folder-icon" />
                   <div className="folder-info">
                     <h3>{trek.name}</h3>
-                    <span className="folder-meta">{trek.routes.length} étapes</span>
+                    <span className="folder-meta">
+                      {trek.routes.length} étape{trek.routes.length > 1 ? 's' : ''}
+                      {' · '}
+                      Σ {totals.distanceKm.toFixed(1)} km
+                      {' · '}
+                      D+ cumul {Math.round(totals.elevationGainM)} m
+                    </span>
                   </div>
                 </div>
                 <div className="folder-actions">
+                  <button
+                    type="button"
+                    className="icon-btn small trek-export-btn"
+                    disabled={trekZipBusyId === trek.id}
+                    title="Télécharger toutes les étapes (ZIP de GPX)"
+                    onClick={(e) => handleDownloadTrekZip(e, trek)}
+                  >
+                    <Archive size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn small trek-export-btn"
+                    disabled={trekZipBusyId === trek.id}
+                    title="Partager le ZIP (Drive, Fichiers…)"
+                    onClick={(e) => handleShareTrekZip(e, trek)}
+                  >
+                    <Share2 size={18} />
+                  </button>
                   <button 
                     className="btn primary small create-step-btn" 
                     onClick={(e) => { 
@@ -148,10 +231,10 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
                           <h3>{route.name}</h3>
                           <div className="route-meta">
                             <span className="meta-item">
-                              {route.distance_km.toFixed(1)} km
+                              {(Number(route.distance_km) || 0).toFixed(1)} km
                             </span>
                             <span className="meta-item">
-                              +{route.elevation_gain_m} m
+                              +{Math.round(Number(route.elevation_gain_m) || 0)} m
                             </span>
                           </div>
                         </div>
@@ -169,7 +252,8 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
 
           {/* Render Standalone Routes */}
           {groupedRoutes.standalone.map(route => (
@@ -187,10 +271,10 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
                       {new Date(route.date).toLocaleDateString()}
                     </span>
                     <span className="meta-item">
-                      <strong>{route.distance_km.toFixed(1)} km</strong>
+                      <strong>{(Number(route.distance_km) || 0).toFixed(1)} km</strong>
                     </span>
                     <span className="meta-item">
-                      <strong>+{route.elevation_gain_m} m</strong>
+                      <strong>+{Math.round(Number(route.elevation_gain_m) || 0)} m</strong>
                     </span>
                   </div>
                 </div>

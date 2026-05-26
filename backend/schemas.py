@@ -9,8 +9,14 @@ class RouteSegment(BaseModel):
     nature: str
 
 class RouteRequest(BaseModel):
+    """skip_elevation: skip IGN altimetry on the server; use POST /api/route/elevation for D+/profile."""
+
     waypoints: list[Waypoint]
-    provider: str = "ign"
+    skip_elevation: bool = False
+
+
+class CoordinatesElevationRequest(BaseModel):
+    coordinates: list[list[float]]  # [lat, lng] per point, same order as RouteResponse.coordinates
 
 class ElevationPoint(BaseModel):
     distance: float
@@ -26,6 +32,12 @@ class RouteResponse(BaseModel):
     elevation_loss_m: float
     elevation_profile: list[ElevationPoint]
     road_type_summary: dict[str, float]
+
+
+class ElevationOnlyResponse(BaseModel):
+    elevation_gain_m: float
+    elevation_loss_m: float
+    elevation_profile: list[ElevationPoint]
 
 class SearchResponse(BaseModel):
     name: str

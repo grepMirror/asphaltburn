@@ -1,7 +1,5 @@
 import React, { useEffect } from 'react';
-import { LayersControl, WMSTileLayer, MapContainer, TileLayer, Polyline, Marker, CircleMarker, useMapEvents, useMap, Tooltip, Popup } from 'react-leaflet';
-import { Tent, Droplets, Home, Info, ShoppingCart, Bath } from 'lucide-react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { LayersControl, WMSTileLayer, MapContainer, TileLayer, Polyline, Marker, CircleMarker, useMapEvents, useMap, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import LocationButton from './LocationButton';
@@ -106,41 +104,8 @@ const getKmMarkers = (coords) => {
   return markers;
 };
 
-// POI Icons using Lucide
-const getPoiIcon = (type) => {
-  let color = "#3b82f6";
-  let Icon = Info;
-  
-  if (type === "camping") { color = "#10b981"; Icon = Tent; }
-  if (type === "water") { color = "#3b82f6"; Icon = Droplets; }
-  if (type === "shelter") { color = "#f59e0b"; Icon = Home; }
-  if (type === "shop") { color = "#8b5cf6"; Icon = ShoppingCart; }
-  if (type === "toilets") { color = "#ef4444"; Icon = Bath; }
 
-  const iconHtml = renderToStaticMarkup(
-    <div style={{
-      backgroundColor: color,
-      borderRadius: '50%',
-      padding: '6px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      border: '2px solid white',
-      boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
-    }}>
-      <Icon color="white" size={16} />
-    </div>
-  );
-
-  return L.divIcon({
-    html: iconHtml,
-    className: 'poi-marker-icon',
-    iconSize: [32, 32],
-    iconAnchor: [16, 16]
-  });
-};
-
-const MapComponent = ({ waypoints, trekRoutes, routeCoordinates, segments, onMapClick, onMarkerDrag, searchResult, isMobile, pois, onBoundsChange }) => {
+const MapComponent = ({ waypoints, trekRoutes, routeCoordinates, segments, onMapClick, onMarkerDrag, searchResult, isMobile, onBoundsChange }) => {
   const kmMarkers = getKmMarkers(routeCoordinates);
 
   return (
@@ -223,42 +188,6 @@ const MapComponent = ({ waypoints, trekRoutes, routeCoordinates, segments, onMap
           />
         ))}
 
-        {/* Outdoor POIs from API */}
-        {pois && pois.map((poi) => (
-          <Marker 
-            key={`poi-${poi.id}`} 
-            position={[poi.lat, poi.lon]} 
-            icon={getPoiIcon(poi.type)}
-          >
-            <Tooltip className="poi-tooltip" direction="top" offset={[0, -10]} opacity={0.9}>
-              <div className="poi-tooltip-content">
-                <strong>{poi.name}</strong>
-                <span className="poi-type-tag">{poi.type}</span>
-              </div>
-            </Tooltip>
-            <Popup className="poi-popup">
-              <div className="poi-popup-content">
-                <h3>{poi.name}</h3>
-                <span className="poi-badge">{poi.type}</span>
-                <button 
-                  className="poi-add-btn btn-primary btn"
-                  onClick={() => onMapClick({ lat: poi.lat, lng: poi.lon })}
-                >
-                  Ajouter à l'itinéraire
-                </button>
-                <div className="poi-tags">
-                  {Object.entries(poi.tags).map(([k, v]) => (
-                    k !== 'name' && k !== 'tourism' && k !== 'amenity' && (
-                      <div key={k} className="poi-tag">
-                        <strong>{k}:</strong> {v}
-                      </div>
-                    )
-                  ))}
-                </div>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
 
         {/* Companion Trek Routes (Low Opacity) */}
         {trekRoutes && trekRoutes.map((trekRoute, tIdx) => {

@@ -4,11 +4,28 @@ import MapComponent from './components/MapComponent';
 import Dashboard from './components/Dashboard';
 import TopRightMenu from './components/TopRightMenu';
 import TrainingPlanner from './components/TrainingPlanner';
+import AcwrChartsPage from './components/AcwrChartsPage';
 import SavedRoutes from './components/SavedRoutes';
 import './App.css';
 import L from 'leaflet';
 import { API_BASE_URL } from './config';
-import { BarChart2, Search, Loader2 } from 'lucide-react';
+
+import { X } from 'lucide-react';
+
+const ROUTE_DEBOUNCE_MS = 350;
+
+const emptyRouteInfo = () => ({
+  coordinates: [],
+  segments: [],
+  distance_km: 0,
+  elevation_gain_m: 0,
+  elevation_loss_m: 0,
+  elevation_profile: [],
+  road_type_summary: {},
+});
+
+const isRouteRequestCancelled = (error) =>
+  axios.isCancel(error) || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';
 
 // Custom hook: detect mobile viewport
 const useIsMobile = () => {
@@ -21,8 +38,29 @@ const useIsMobile = () => {
   return isMobile;
 };
 
+const STORAGE_KEY = 'openrun_track';
+
+function loadPersistedTrack() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+function persistTrack(waypoints, activeTrek) {
+  try {
+    if (!waypoints || waypoints.length === 0) {
+      localStorage.removeItem(STORAGE_KEY);
+    } else {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ waypoints, activeTrek }));
+    }
+  } catch { /* quota exceeded or private browsing */ }
+}
+
 function App() {
-  const [waypoints, setWaypoints] = useState([]);
+  const persisted = loadPersistedTrack();
+  const [waypoints, setWaypoints] = useState(persisted?.waypoints || []);
   const [routeInfo, setRouteInfo] = useState({
     coordinates: [],
     segments: [],
@@ -33,49 +71,116 @@ function App() {
     road_type_summary: {}
   });
   const [trekRoutes, setTrekRoutes] = useState([]);
-  const [activeTrek, setActiveTrek] = useState(null); // { id: string, name: string }
+  const [activeTrek, setActiveTrek] = useState(persisted?.activeTrek || null);
   const [searchResult, setSearchResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [view, setView] = useState('map'); // 'map', 'training', or 'saved'
+  const [isElevationLoading, setIsElevationLoading] = useState(false);
+  const [routeError, setRouteError] = useState(null);
+  const [view, setView] = useState('map'); // 'map', 'training', 'saved', or 'acwr'
   const [dashboardOpen, setDashboardOpen] = useState(false); // mobile dashboard toggle
-  const [pois, setPois] = useState([]);
   const [mapBounds, setMapBounds] = useState(null);
-  const [isSearchingPOIs, setIsSearchingPOIs] = useState(false);
 
   const isMobile = useIsMobile();
 
-  // When waypoints change, calculate the route
-  useEffect(() => {
-    const controller = new AbortController();
-    
-    if (waypoints.length >= 2) {
-      calculateRoute(controller.signal);
-    } else {
-      setRouteInfo({ coordinates: [], segments: [], distance_km: 0, elevation_gain_m: 0, elevation_loss_m: 0, elevation_profile: [], road_type_summary: {} });
-    }
-
-    return () => controller.abort();
-  }, [waypoints]);
-
-  const calculateRoute = async (signal) => {
-    setIsLoading(true);
-    try {
-      const response = await axios.post(`${API_BASE_URL}/api/route`, {
-        waypoints: waypoints
-      }, { signal });
-      setRouteInfo(response.data);
-    } catch (error) {
-      if (axios.isCancel(error)) {
-        console.log("Request cancelled:", error.message);
-      } else {
-        console.error("Error calculating route:", error);
-      }
-    } finally {
-      setIsLoading(false);
+  const handleViewChange = (nextView) => {
+    setView(nextView);
+    if (nextView === 'map') {
+      setDashboardOpen(false);
     }
   };
 
+  useEffect(() => {
+    persistTrack(waypoints, activeTrek);
+  }, [waypoints, activeTrek]);
+
+  // Debounced route (IGN) with skip_elevation; D+/profile filled via POST /api/route/elevation in the same turn.
+  useEffect(() => {
+    if (waypoints.length < 2) {
+      setRouteInfo(emptyRouteInfo());
+      setRouteError(null);
+      setIsLoading(false);
+      setIsElevationLoading(false);
+      return undefined;
+    }
+
+    const routeController = new AbortController();
+    const elevController = new AbortController();
+    const debounceTimer = setTimeout(() => {
+      (async () => {
+        setIsLoading(true);
+        setIsElevationLoading(false);
+        setRouteError(null);
+        let routeData = null;
+        try {
+          const response = await axios.post(
+            `${API_BASE_URL}/api/route`,
+            { waypoints, skip_elevation: true },
+            { signal: routeController.signal }
+          );
+          if (routeController.signal.aborted) {
+            return;
+          }
+          routeData = response.data;
+          setRouteInfo(routeData);
+        } catch (error) {
+          if (isRouteRequestCancelled(error)) {
+            return;
+          }
+          const detail = error.response?.data?.detail;
+          const message =
+            typeof detail === 'string'
+              ? detail
+              : Array.isArray(detail)
+                ? detail.map((d) => d.msg || JSON.stringify(d)).join(' — ')
+                : error.message || 'Erreur réseau';
+          setRouteError(message);
+          setRouteInfo(emptyRouteInfo());
+          console.error('Error calculating route:', error);
+          return;
+        } finally {
+          setIsLoading(false);
+        }
+
+        const coords = routeData?.coordinates;
+        if (!coords || coords.length < 2 || routeController.signal.aborted) {
+          return;
+        }
+
+        setIsElevationLoading(true);
+        try {
+          const elev = await axios.post(
+            `${API_BASE_URL}/api/route/elevation`,
+            { coordinates: coords },
+            { signal: elevController.signal }
+          );
+          if (elevController.signal.aborted) {
+            return;
+          }
+          setRouteInfo((prev) => ({
+            ...prev,
+            elevation_gain_m: elev.data.elevation_gain_m,
+            elevation_loss_m: elev.data.elevation_loss_m,
+            elevation_profile: elev.data.elevation_profile,
+          }));
+        } catch (err) {
+          if (!isRouteRequestCancelled(err)) {
+            console.error('Error fetching elevation:', err);
+          }
+        } finally {
+          setIsElevationLoading(false);
+        }
+      })();
+    }, ROUTE_DEBOUNCE_MS);
+
+    return () => {
+      clearTimeout(debounceTimer);
+      routeController.abort();
+      elevController.abort();
+    };
+  }, [waypoints]);
+
   const handleMapClick = (latlng) => {
+    setRouteError(null);
     setWaypoints([...waypoints, { lat: latlng.lat, lng: latlng.lng }]);
     setSearchResult(null);
   };
@@ -98,6 +203,7 @@ function App() {
     setWaypoints([]);
     setTrekRoutes([]);
     setActiveTrek(null);
+    setRouteError(null);
   };
 
   const handleExportGPX = async () => {
@@ -119,6 +225,7 @@ function App() {
       console.error("Error exporting GPX:", error);
     }
   };
+
 
   const handleImportGPX = (file) => {
     const reader = new FileReader();
@@ -212,7 +319,8 @@ function App() {
   };
 
   const handleLoadRoute = async (savedRoute) => {
-    // We set waypoints, which will trigger the calculateRoute useEffect.
+    setRouteError(null);
+    // We set waypoints, which will trigger the route useEffect (debounced recalculation).
     setWaypoints(savedRoute.waypoints);
     setRouteInfo(savedRoute.route_data);
     
@@ -236,7 +344,8 @@ function App() {
 
   const handleCreateTrekStep = async (trekId, trekName) => {
     setWaypoints([]);
-    setRouteInfo({ coordinates: [], segments: [], distance_km: 0, elevation_gain_m: 0, elevation_loss_m: 0, elevation_profile: [], road_type_summary: {} });
+    setRouteInfo(emptyRouteInfo());
+    setRouteError(null);
     setActiveTrek({ id: trekId, name: trekName });
     
     try {
@@ -249,30 +358,6 @@ function App() {
     setView('map');
   };
 
-  const handleSearchPOIs = async () => {
-    if (!mapBounds) return;
-    setIsSearchingPOIs(true);
-    try {
-      const { _southWest, _northEast } = mapBounds;
-      const response = await axios.get(`${API_BASE_URL}/api/pois`, {
-        params: {
-          min_lat: _southWest.lat,
-          min_lon: _southWest.lng,
-          max_lat: _northEast.lat,
-          max_lon: _northEast.lng
-        }
-      });
-      setPois(response.data);
-      if (response.data.length === 0) {
-        alert("Aucun point d'intérêt trouvé dans cette zone.");
-      }
-    } catch (error) {
-      console.error("Error searching POIs:", error);
-      alert("Erreur lors de la recherche des points d'intérêt.");
-    } finally {
-      setIsSearchingPOIs(false);
-    }
-  };
 
   return (
     <div className="app-container">
@@ -283,7 +368,7 @@ function App() {
         onUndo={handleUndo}
         waypointsCount={waypoints.length}
         currentView={view}
-        onViewChange={setView}
+        onViewChange={handleViewChange}
       />
       
       {view === 'map' ? (
@@ -297,19 +382,8 @@ function App() {
             onMarkerDrag={handleMarkerDrag}
             searchResult={searchResult}
             isMobile={isMobile}
-            pois={pois}
             onBoundsChange={setMapBounds}
           />
-
-          <button 
-            className={`poi-search-btn ${isSearchingPOIs ? 'loading' : ''}`}
-            onClick={handleSearchPOIs}
-            disabled={isSearchingPOIs}
-            title="Chercher Camping, Bivouac, Eau, Toilettes, Magasins..."
-          >
-            {isSearchingPOIs ? <Loader2 className="spinner" size={20} /> : <Search size={20} />}
-            <span>{isSearchingPOIs ? 'Recherche...' : 'Services & Bivouac'}</span>
-          </button>
 
           <Dashboard 
             distance={routeInfo.distance_km}
@@ -327,10 +401,13 @@ function App() {
             onClose={() => setDashboardOpen(false)}
             onSave={handleSaveRoute}
             activeTrek={activeTrek}
+            elevationLoading={isElevationLoading}
           />
         </>
       ) : view === 'training' ? (
-        <TrainingPlanner />
+        <TrainingPlanner onOpenAcwrCharts={() => setView('acwr')} />
+      ) : view === 'acwr' ? (
+        <AcwrChartsPage onBack={() => setView('training')} />
       ) : (
         <SavedRoutes 
           onLoadRoute={handleLoadRoute}
@@ -353,6 +430,48 @@ function App() {
           fontSize: '0.9rem'
         }}>
           Calcul de l'itinéraire...
+        </div>
+      )}
+
+      {routeError && (
+        <div
+          role="alert"
+          style={{
+            position: 'absolute',
+            top: isLoading ? '5.25rem' : '2rem',
+            right: '2rem',
+            maxWidth: 'min(420px, calc(100vw - 2rem))',
+            background: 'rgba(127, 29, 29, 0.92)',
+            padding: '0.65rem 0.85rem',
+            borderRadius: '1rem',
+            zIndex: 1002,
+            backdropFilter: 'blur(4px)',
+            color: 'white',
+            fontSize: '0.85rem',
+            lineHeight: 1.35,
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '0.5rem',
+            boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+          }}
+        >
+          <span style={{ flex: 1 }}>{routeError}</span>
+          <button
+            type="button"
+            onClick={() => setRouteError(null)}
+            aria-label="Fermer"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'white',
+              cursor: 'pointer',
+              padding: 2,
+              display: 'flex',
+              lineHeight: 0,
+            }}
+          >
+            <X size={18} />
+          </button>
         </div>
       )}
     </div>

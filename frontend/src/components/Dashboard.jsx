@@ -13,7 +13,22 @@ const ROAD_TYPE_COLORS = {
   "Default": "#0040a1"
 };
 
-const Dashboard = ({ distance, elevation, elevationLoss, elevationProfile, roadTypeSummary, onUndo, onReset, onSave, waypointsCount, isMobile, isOpen, onOpen, onClose }) => {
+const Dashboard = ({
+  distance,
+  elevation,
+  elevationLoss,
+  elevationProfile,
+  roadTypeSummary,
+  onUndo,
+  onReset,
+  onSave,
+  waypointsCount,
+  isMobile,
+  isOpen,
+  onOpen,
+  onClose,
+  elevationLoading = false,
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [pace, setPace] = useState("6:30");
 
@@ -62,7 +77,9 @@ const Dashboard = ({ distance, elevation, elevationLoss, elevationProfile, roadT
           </div>
           <div className="mini-stat" style={{ gap: '0.3rem' }}>
             <TrendingUp size={14} style={{ color: '#10b981' }} />
-            <span style={{ fontWeight: '800', fontSize: '0.9rem', color: '#10b981' }}>{elevation} <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>m</span></span>
+            <span style={{ fontWeight: '800', fontSize: '0.9rem', color: '#10b981' }}>
+              {elevationLoading ? '…' : elevation} <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>m</span>
+            </span>
           </div>
         </div>
       </div>
@@ -72,7 +89,7 @@ const Dashboard = ({ distance, elevation, elevationLoss, elevationProfile, roadT
   const classNames = [
     'floating-dashboard',
     'glass-panel',
-    isMobile ? 'mobile-overlay' : '',
+    isMobile && isOpen ? 'mobile-overlay' : '',
     !isMobile && isExpanded ? 'expanded' : '',
   ].filter(Boolean).join(' ');
 
@@ -80,6 +97,10 @@ const Dashboard = ({ distance, elevation, elevationLoss, elevationProfile, roadT
     <div 
       className={classNames}
       onClick={(e) => {
+        if (isMobile && isOpen) {
+          onClose();
+          return;
+        }
         e.stopPropagation();
         if (!isMobile && !isExpanded) setIsExpanded(true);
       }}
@@ -98,7 +119,19 @@ const Dashboard = ({ distance, elevation, elevationLoss, elevationProfile, roadT
         gap: 0
       }}
     >
-      <div className="dashboard-handle" onClick={(e) => { e.stopPropagation(); if (isMobile) onClose(); else setIsExpanded(!isExpanded); }} / >
+      <div
+        className={isMobile && isOpen ? 'dashboard-overlay-panel' : undefined}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'stretch',
+          flex: isMobile && isOpen ? 1 : undefined,
+          minHeight: 0,
+          overflow: isMobile && isOpen ? 'auto' : undefined,
+        }}
+      >
+      <div className="dashboard-handle" onClick={(e) => { e.stopPropagation(); if (isMobile) onClose(); else setIsExpanded(!isExpanded); }} />
       
       {(isMobile || isExpanded) && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '1.5rem', flexShrink: 0 }}>
@@ -106,7 +139,22 @@ const Dashboard = ({ distance, elevation, elevationLoss, elevationProfile, roadT
             <h3 className="font-headline" style={{ fontSize: '1rem', fontWeight: '800', color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Résumé</h3>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Parcours optimisé • {distance} km</span>
           </div>
-          <button className="btn glass-panel icon-btn small" onClick={(e) => { e.stopPropagation(); isMobile ? onClose() : setIsExpanded(false); }} style={{ background: '#f8fafc', border: 'none' }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); if (isMobile) onClose(); else setIsExpanded(false); }}
+            style={{
+              width: '36px',
+              height: '36px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%',
+              border: '1px solid rgba(0,0,0,0.08)',
+              background: '#f1f5f9',
+              color: '#64748b',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
             <X size={18} />
           </button>
         </div>
@@ -159,14 +207,18 @@ const Dashboard = ({ distance, elevation, elevationLoss, elevationProfile, roadT
         }}>
           <TrendingUp size={18} style={{ color: '#10b981' }} />
           { (isExpanded || isMobile) && <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Gain D+</span> }
-          <div className="stat-value" style={{ color: '#10b981', fontSize: '1rem' }}>{elevation} <span style={{ fontSize: '0.7rem' }}>m</span></div>
+          <div className="stat-value" style={{ color: '#10b981', fontSize: '1rem' }}>
+            {elevationLoading ? '…' : elevation} <span style={{ fontSize: '0.7rem' }}>m</span>
+          </div>
         </div>
 
         {(isExpanded || isMobile) && (
           <div className="stat-item" style={{ background: '#f8fafc', padding: '0.5rem 1rem', borderRadius: '1rem', border: '1px solid rgba(0,0,0,0.02)', flexDirection: 'row', alignItems: 'center', gap: '0.6rem' }}>
             <TrendingUp size={18} style={{ color: '#ef4444', transform: 'rotate(180deg)' }} />
             <span style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Pertes D-</span>
-            <div className="stat-value" style={{ color: '#ef4444', fontSize: '1rem' }}>{elevationLoss} <span style={{ fontSize: '0.7rem' }}>m</span></div>
+            <div className="stat-value" style={{ color: '#ef4444', fontSize: '1rem' }}>
+              {elevationLoading ? '…' : elevationLoss} <span style={{ fontSize: '0.7rem' }}>m</span>
+            </div>
           </div>
         )}
       </div>
@@ -234,6 +286,7 @@ const Dashboard = ({ distance, elevation, elevationLoss, elevationProfile, roadT
           </div>
         </>
       )}
+      </div>
     </div>
   );
 };

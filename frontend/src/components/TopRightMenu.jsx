@@ -55,7 +55,7 @@ const TopRightMenu = ({ onCitySelect, onExport, onImport, onUndo, waypointsCount
           </button>
           
           <button 
-            className={`icon-btn ${currentView === 'training' ? 'active' : ''}`} 
+            className={`icon-btn ${currentView === 'training' || currentView === 'acwr' ? 'active' : ''}`} 
             onClick={() => onViewChange('training')} 
             title="Training Calendar"
           >
@@ -92,7 +92,7 @@ const TopRightMenu = ({ onCitySelect, onExport, onImport, onUndo, waypointsCount
             className="icon-btn" 
             onClick={onExport} 
             disabled={waypointsCount < 2} 
-            title="Export GPX"
+            title="Télécharger GPX"
           >
             <Download size={20} />
           </button>

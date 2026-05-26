@@ -10,6 +10,13 @@
   --accent: #ffd29e;
   --error: #ba1a1a;
   --surface-dim: #d8dadc;
+  --mobile-nav-height: calc(3.75rem + env(safe-area-inset-bottom));
+  --mobile-header-height: calc(3.25rem + env(safe-area-inset-top));
+  --mobile-peek-height: calc(3.5rem + env(safe-area-inset-bottom));
+}
+
+html {
+  height: 100%;
 }
 
 * {
@@ -22,9 +29,10 @@ body {
   font-family: 'Inter', system-ui, sans-serif;
   background-color: var(--bg-light);
   color: var(--text-primary);
-  height: 100vh;
-  width: 100vw;
+  height: 100%;
+  width: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
 }
 
 h1,
@@ -44,6 +52,206 @@ h4,
   position: relative;
   height: 100%;
   width: 100%;
+  overflow: hidden;
+}
+
+/* Scrollable full-page views (training, saved, ACWR) */
+.app-page {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg-light);
+}
+
+.app-container--mobile.app-container--page .app-page {
+  bottom: var(--mobile-nav-height);
+}
+
+/* Mobile bottom navigation */
+.mobile-bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3000;
+  display: none;
+  align-items: stretch;
+  justify-content: space-around;
+  padding: 0.35rem calc(0.5rem + env(safe-area-inset-right)) calc(0.35rem + env(safe-area-inset-bottom)) calc(0.5rem + env(safe-area-inset-left));
+  border-radius: 1.25rem 1.25rem 0 0;
+  box-shadow: 0 -8px 32px rgba(0, 64, 161, 0.12);
+}
+
+.mobile-nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+  min-height: 48px;
+  padding: 0.35rem 0.25rem;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 0.75rem;
+  transition: color 0.2s, background 0.2s;
+}
+
+.mobile-nav-item.active {
+  color: var(--primary);
+  background: var(--primary-container);
+}
+
+.top-menu-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.top-menu-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.05);
+  margin: 0 0.25rem;
+}
+
+.top-right-menu--mobile {
+  margin: 0 !important;
+  padding: 0.35rem !important;
+  gap: 0.35rem !important;
+  max-width: calc(100vw - 1.5rem - env(safe-area-inset-left) - env(safe-area-inset-right));
+}
+
+.search-row-mobile {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.mobile-actions-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+
+.mobile-actions-sheet {
+  width: 100%;
+  max-width: 480px;
+  padding: 0.75rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+  border-radius: 1.25rem 1.25rem 0 0;
+  animation: exportSheetUp 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.mobile-actions-handle {
+  width: 2.5rem;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(100, 116, 139, 0.35);
+  margin: 0.35rem auto 0.85rem;
+}
+
+.mobile-actions-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 0 0 1rem;
+}
+
+.mobile-action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 48px;
+  padding: 0.65rem 0.5rem;
+  border: none;
+  background: transparent;
+  border-radius: 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.mobile-action-row:hover:not(:disabled) {
+  background: var(--bg-light);
+}
+
+.mobile-action-row:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mobile-actions-close {
+  width: 100%;
+  margin-top: 0.75rem;
+  justify-content: center;
+  background: var(--bg-light);
+  color: var(--text-secondary);
+}
+
+.route-status-toast {
+  position: fixed;
+  top: calc(1rem + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(420px, calc(100vw - 2rem));
+  width: max-content;
+  padding: 0.5rem 1rem;
+  border-radius: 1rem;
+  z-index: 1025;
+  backdrop-filter: blur(4px);
+  color: white;
+  font-size: 0.9rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+
+.route-status-toast--loading {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.route-status-toast--error {
+  background: rgba(127, 29, 29, 0.92);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  line-height: 1.35;
+  font-size: 0.85rem;
+  padding: 0.65rem 0.85rem;
+}
+
+.route-status-toast--below {
+  top: calc(3.75rem + env(safe-area-inset-top));
+}
+
+.route-status-toast__text {
+  flex: 1;
+}
+
+.route-status-toast__close {
+  background: transparent;
+  border: none;
+  color: white;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  line-height: 0;
+  flex-shrink: 0;
 }
 
 .map-container {
@@ -305,6 +513,7 @@ h4,
   background: var(--primary);
 }
 
+
 .road-type-item {
   display: flex;
   justify-content: space-between;
@@ -331,21 +540,264 @@ h4,
 
 /* Training Planner Styles */
 .training-planner-container {
-  height: 100%;
   width: 100%;
-  padding: 6rem 2rem 2rem;
-  overflow-y: auto;
+  min-height: 100%;
+  padding: 1.5rem 2rem 2.5rem;
   display: flex;
   flex-direction: column;
   gap: 2.5rem;
   max-width: 1000px;
   margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.app-page .training-planner-container {
+  padding-top: 1.25rem;
+}
+
+.acwr-charts-page {
+  max-width: 1100px;
+}
+
+.acwr-chart-card {
+  padding: 1.25rem 1.5rem;
+  border-radius: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.acwr-chart-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  color: var(--primary);
+}
+
+.acwr-chart-wrap {
+  width: 100%;
+  min-height: 320px;
+}
+
+.acwr-footnote {
+  font-size: 0.78rem;
+  opacity: 0.75;
+  line-height: 1.45;
+}
+
+.planner-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.planner-header-top {
+  width: 100%;
+}
+
+.planner-title-block .subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.planner-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.planner-nav-today {
+  padding: 0.5rem 1rem;
+  min-height: 44px;
+}
+
+.planner-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.planner-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.9rem;
+  min-height: 44px;
+  flex: 1;
+  min-width: max(8rem, calc(50% - 0.25rem));
+}
+
+.weekly-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  width: 100%;
 }
 
 .planner-header h1 {
   font-size: 2.5rem;
   font-weight: 800;
   color: var(--primary);
+  margin: 0;
+}
+
+.export-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  background: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.export-modal {
+  width: 100%;
+  max-width: 480px;
+  max-height: min(92vh, 100dvh);
+  padding: 0.75rem 1.25rem calc(1.25rem + env(safe-area-inset-bottom));
+  padding-left: calc(1.25rem + env(safe-area-inset-left));
+  padding-right: calc(1.25rem + env(safe-area-inset-right));
+  border-radius: 1.25rem 1.25rem 0 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  animation: exportSheetUp 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes exportSheetUp {
+  from {
+    transform: translateY(100%);
+    opacity: 0.6;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.export-modal-handle {
+  width: 2.5rem;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(100, 116, 139, 0.35);
+  margin: 0.35rem auto 0.85rem;
+}
+
+.export-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.export-modal-header h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 0;
+}
+
+.export-modal-desc {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin: 0 0 1.25rem;
+}
+
+.export-modal-dates {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.export-modal-dates label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.export-modal-dates input[type="date"] {
+  padding: 0.75rem 0.85rem;
+  min-height: 48px;
+  width: 100%;
+  border: 1px solid var(--glass-border);
+  border-radius: 0.75rem;
+  font-size: 1rem;
+  background: var(--bg-light, #f8fafc);
+  color: inherit;
+  box-sizing: border-box;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.export-modal-preview {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--primary);
+  margin: 0 0 0.75rem;
+}
+
+.export-modal-error {
+  font-size: 0.85rem;
+  color: var(--danger, #dc2626);
+  margin: 0 0 0.75rem;
+}
+
+.export-modal-success {
+  font-size: 0.85rem;
+  color: #059669;
+  margin: 0 0 0.75rem;
+  line-height: 1.4;
+}
+
+.export-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.25rem;
+}
+
+.export-modal-action-primary,
+.export-modal-action-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 48px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.export-modal-cancel {
+  width: 100%;
+  min-height: 44px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.export-modal-close {
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
 }
 
 .stat-card {
@@ -453,7 +905,18 @@ h4,
 .folder-actions {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.trek-export-btn {
+  flex-shrink: 0;
+  opacity: 0.92;
+}
+
+.trek-export-btn:disabled {
+  opacity: 0.45;
 }
 
 .create-step-btn {
@@ -484,6 +947,9 @@ h4,
   font-size: 0.75rem;
   color: var(--text-secondary);
   font-weight: 600;
+  display: block;
+  margin-top: 0.25rem;
+  line-height: 1.35;
 }
 
 .trek-steps {
@@ -617,13 +1083,28 @@ h4,
 }
 
 .planner-loading {
-  height: 100%;
+  min-height: 60vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 1rem;
   color: var(--text-secondary);
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.activity-details-page,
+.activity-details-view {
+  padding: 1rem;
+  padding-bottom: 2rem;
+  box-sizing: border-box;
+}
+
+.activity-details-page {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
 }
 
 .week-nav {
@@ -650,6 +1131,20 @@ h4,
 .percent-tag.negative {
   background: rgba(239, 68, 68, 0.15);
   color: #ef4444;
+}
+
+.activities-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+.activities-list h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
 }
 
 .no-data {
@@ -695,12 +1190,11 @@ h4,
    Mobile Map Buttons (FABs)
    ============================================== */
 
-/* Floating buttons on map (Location, Compass) - Reset relative to App container */
+/* Floating buttons on map (Location, Compass) */
 .map-fab-btn {
   position: fixed;
-  /* Use fixed for better control */
   left: calc(1rem + env(safe-area-inset-left)) !important;
-  z-index: 1000;
+  z-index: 1010;
   width: 44px !important;
   height: 44px !important;
   border-radius: 50%;
@@ -711,6 +1205,14 @@ h4,
   justify-content: center;
   color: var(--text-primary);
   transition: all 0.2s ease;
+}
+
+.map-fab-locate {
+  top: calc(10rem + env(safe-area-inset-top));
+}
+
+.map-fab-compass {
+  top: calc(13.75rem + env(safe-area-inset-top));
 }
 
 .map-fab-btn:hover {
@@ -770,31 +1272,37 @@ h4,
   }
 }
 
-/* The full overlay dashboard - TRUE FULL SCREEN ON MOBILE */
+/* Mobile: dimmed backdrop + sheet panel (map stays visible behind) */
 .floating-dashboard.mobile-overlay {
   position: fixed !important;
   left: 0 !important;
   right: 0 !important;
   bottom: 0 !important;
   top: 0 !important;
-  /* Cover everything */
   transform: none !important;
-  width: 100vw !important;
-  height: 100vh !important;
-  max-width: 100vw !important;
-  min-width: 100vw !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
   border-radius: 0 !important;
-  /* Remove radius for full screen */
-  padding: calc(1rem + env(safe-area-inset-top)) 1.25rem calc(5rem + env(safe-area-inset-bottom)) !important;
+  padding: 0 !important;
+  background: rgba(15, 23, 42, 0.4) !important;
   z-index: 5000 !important;
-  /* Ensure it is ABOVE EVERYHTING */
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  overflow-y: auto;
-  overflow-x: hidden;
+  justify-content: flex-end;
+  gap: 0;
+  overflow: hidden;
   box-sizing: border-box;
   animation: slideUpOverlay 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.floating-dashboard.mobile-overlay .dashboard-overlay-panel {
+  background: var(--card-bg);
+  border-radius: 1.25rem 1.25rem 0 0;
+  padding: calc(0.75rem + env(safe-area-inset-top)) 1.25rem calc(1.5rem + env(safe-area-inset-bottom));
+  max-height: 92dvh;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.15);
 }
 
 .floating-dashboard.mobile-overlay .expanded-content {
@@ -826,12 +1334,20 @@ h4,
    ============================================== */
 @media (max-width: 768px) {
 
-  /* Top right menu — tighter layout + safe areas */
+  .mobile-bottom-nav {
+    display: flex;
+  }
+
+  /* Top right menu — compact, map only */
   .top-right-menu {
     top: calc(0.75rem + env(safe-area-inset-top));
     right: calc(0.75rem + env(safe-area-inset-right));
-    gap: 0.5rem;
+    gap: 0.35rem;
     z-index: 1020;
+  }
+
+  .app-container--page .top-right-menu {
+    display: none;
   }
 
   /* Icon buttons — comfortable touch targets */
@@ -842,8 +1358,8 @@ h4,
   }
 
   /* Search bar adapts to available width on mobile */
-  .search-container.open {
-    width: calc(100vw - 2rem - 44px - 0.5rem - env(safe-area-inset-right) - env(safe-area-inset-left));
+  .top-right-menu--mobile .search-container.open {
+    width: min(100vw - 2rem - env(safe-area-inset-left) - env(safe-area-inset-right), 320px);
   }
 
   /* Hide the desktop floating dashboard on mobile */
@@ -851,25 +1367,106 @@ h4,
     display: none;
   }
 
-  /* Leaflet zoom controls — avoid overlap with map buttons and peek bar */
+  /* Leaflet zoom — top right, clear of header */
   .leaflet-control-zoom {
-    margin-left: calc(0.75rem + env(safe-area-inset-left)) !important;
-    margin-top: calc(0.75rem + env(safe-area-inset-top) + 60px) !important;
+    margin-right: calc(0.75rem + env(safe-area-inset-right)) !important;
+    margin-top: calc(0.75rem + env(safe-area-inset-top)) !important;
+    margin-left: unset !important;
     margin-bottom: unset !important;
   }
 
-  /* Training planner — safe areas */
+  /* Map FABs — bottom left, above nav + peek */
+  .map-fab-locate {
+    top: auto !important;
+    bottom: calc(var(--mobile-nav-height) + var(--mobile-peek-height) + 0.5rem);
+  }
+
+  .map-fab-compass {
+    top: auto !important;
+    bottom: calc(var(--mobile-nav-height) + var(--mobile-peek-height) + 3.25rem);
+  }
+
+  /* Training planner — scroll inside app-page */
+  .app-page .training-planner-container,
   .training-planner-container {
-    padding: calc(5rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right)) calc(2rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left));
+    padding: 1rem;
+    padding-top: calc(1rem + env(safe-area-inset-top));
+    padding-bottom: 2rem;
     gap: 1.5rem;
+    max-width: 100%;
   }
 
   .planner-header h1 {
-    font-size: 1.8rem;
+    font-size: 1.65rem;
+  }
+
+  .planner-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .week-nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .week-nav .planner-nav-today {
+    flex: 1;
+    margin: 0 0.25rem;
+  }
+
+  .planner-action-buttons {
+    width: 100%;
+  }
+
+  .planner-action-btn {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .sport-filters {
+    width: 100%;
+    justify-content: space-around;
+    padding: 0.65rem 1rem;
+    box-sizing: border-box;
+  }
+
+  .filter-item {
+    min-height: 44px;
+    padding: 0.25rem 0.5rem;
+  }
+
+  .filter-item input {
+    width: 20px;
+    height: 20px;
   }
 
   .weekly-stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .stat-card {
+    padding: 1rem 1.15rem;
+  }
+
+  .value-summary {
+    font-size: 0.85rem;
+    line-height: 1.35;
+  }
+
+  .export-modal-overlay {
+    align-items: flex-end;
+  }
+
+  .export-modal {
+    max-width: 100%;
+    border-radius: 1.25rem 1.25rem 0 0;
+  }
+
+  .export-modal-dates {
+    flex-direction: column;
+    gap: 0.75rem;
   }
 
   /* Activity cards — slightly less padding */
@@ -877,20 +1474,90 @@ h4,
     padding: 1rem;
     gap: 1rem;
   }
+
+  .title-row {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .title-row .date {
+    font-size: 0.8rem;
+  }
+
+  .stats-row {
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+  }
+}
+
+@media (min-width: 769px) {
+  .export-modal-overlay {
+    align-items: center;
+    padding: 1.5rem;
+  }
+
+  .export-modal {
+    border-radius: 1.25rem;
+    padding: 1.5rem;
+    max-height: 90vh;
+    animation: none;
+  }
+
+  .export-modal-handle {
+    display: none;
+  }
+
+  .export-modal-dates {
+    flex-direction: row;
+  }
+
+  .export-modal-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .export-modal-action-primary,
+  .export-modal-action-secondary {
+    width: auto;
+    flex: 1;
+    min-width: 10rem;
+  }
+
+  .export-modal-cancel {
+    width: auto;
+    flex: 0 0 auto;
+  }
+
+  .planner-toolbar {
+    justify-content: flex-end;
+  }
+
+  .planner-action-buttons {
+    flex: 0 0 auto;
+  }
+
+  .sport-filters {
+    margin-left: auto;
+  }
 }
 
 /* Saved Routes View */
 .saved-routes-container {
-  height: 100%;
   width: 100%;
-  padding: 6rem 2rem 2rem;
-  overflow-y: auto;
+  min-height: 100%;
+  padding: 1.25rem 2rem 2.5rem;
   display: flex;
   flex-direction: column;
   gap: 2rem;
   max-width: 800px;
   margin: 0 auto;
   animation: fadeIn 0.3s ease-out;
+  box-sizing: border-box;
+}
+
+.app-page .saved-routes-container {
+  padding-top: 1rem;
 }
 
 .saved-routes-header {
@@ -1136,13 +1803,81 @@ h4,
   opacity: 0.8;
 }
 
-/* Mobile adjustments */
+/* POI button — mobile: above peek bar and bottom nav */
 @media (max-width: 768px) {
   .poi-search-btn {
     top: auto;
-    bottom: 6rem;
-    right: 1.5rem;
-    padding: 0.75rem;
+    bottom: calc(var(--mobile-nav-height) + var(--mobile-peek-height) + 0.35rem);
+    right: calc(0.75rem + env(safe-area-inset-right));
+    left: auto;
+    padding: 0.65rem 0.85rem;
+    max-width: calc(100vw - 5rem - env(safe-area-inset-left) - env(safe-area-inset-right));
+    z-index: 1008;
+  }
+
+  .poi-search-btn span {
+    font-size: 0.8rem;
+  }
+
+  .app-container--mobile .floating-dashboard.mobile-peek {
+    bottom: var(--mobile-nav-height) !important;
+    width: calc(100% - 2rem - env(safe-area-inset-left) - env(safe-area-inset-right)) !important;
+    max-width: none;
+  }
+
+  .saved-routes-container {
+    padding: 1rem;
+    padding-top: calc(1rem + env(safe-area-inset-top));
+  }
+
+  .saved-routes-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .saved-routes-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .route-card-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .route-card-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .trek-folder {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .folder-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .acwr-charts-page .acwr-chart-wrap {
+    min-height: 240px;
+  }
+
+  @media (max-width: 400px) {
+    .poi-search-btn span {
+      display: none;
+    }
+
+    .poi-search-btn {
+      padding: 0.75rem;
+      border-radius: 50%;
+      width: 44px;
+      height: 44px;
+      justify-content: center;
+    }
   }
 }
 
@@ -1252,4 +1987,4 @@ h4,
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
-}
+}

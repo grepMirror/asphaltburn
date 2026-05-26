@@ -1,9 +1,14 @@
-import os
+import io
 import json
+import os
+import re
 import uuid
-from datetime import datetime
-from fastapi import APIRouter, HTTPException
+import zipfile
+
+from fastapi import APIRouter, HTTPException, Response
+
 from schemas import SavedRoute, SavedRouteMetadata
+from service.ign_service import IGNService
 
 router = APIRouter(prefix="/api/saved-routes")
 
@@ -34,6 +39,56 @@ async def list_routes():
     # Sort by date descending
     routes.sort(key=lambda x: x.date, reverse=True)
     return routes
+
+def _slug_filename(name: str, max_len: int = 48) -> str:
+    slug = re.sub(r"[^\w\-]+", "_", name, flags=re.UNICODE).strip("_") or "etape"
+    return slug[:max_len]
+
+
+def _load_trek_route_dicts(trek_id: str) -> list[dict]:
+    trek_routes: list[dict] = []
+    for filename in os.listdir(STORAGE_DIR):
+        if not filename.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(STORAGE_DIR, filename), "r", encoding="utf-8") as f:
+                data = json.load(f)
+                if data.get("trek_id") == trek_id:
+                    trek_routes.append(data)
+        except Exception as e:
+            print(f"Error reading {filename}: {e}")
+    trek_routes.sort(key=lambda x: x["date"])
+    return trek_routes
+
+
+@router.get("/trek/{trek_id}/export-gpx-zip")
+async def export_trek_gpx_zip(trek_id: str):
+    """One ZIP containing one GPX per trek step (ordered by saved date)."""
+    trek_routes = _load_trek_route_dicts(trek_id)
+    if not trek_routes:
+        raise HTTPException(status_code=404, detail="Trek introuvable ou sans étapes")
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for i, data in enumerate(trek_routes):
+            coords = (data.get("route_data") or {}).get("coordinates") or []
+            name = data.get("name") or f"Etape_{i + 1}"
+            slug = _slug_filename(name)
+            fname = f"{i + 1:02d}-{slug}.gpx"
+            gpx_xml = IGNService.generate_gpx(coords, name=name)
+            zf.writestr(fname, gpx_xml.encode("utf-8"))
+
+    buf.seek(0)
+    raw_name = trek_routes[0].get("trek_name") or "trek"
+    zip_base = _slug_filename(raw_name, max_len=32)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{zip_base}-etapes.zip"',
+        },
+    )
+
 
 @router.get("/{route_id}", response_model=SavedRoute)
 async def get_route(route_id: str):
@@ -67,16 +122,4 @@ async def delete_route(route_id: str):
 
 @router.get("/trek/{trek_id}", response_model=list[SavedRoute])
 async def get_trek_routes(trek_id: str):
-    trek_routes = []
-    for filename in os.listdir(STORAGE_DIR):
-        if filename.endswith(".json"):
-            try:
-                with open(os.path.join(STORAGE_DIR, filename), "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    if data.get("trek_id") == trek_id:
-                        trek_routes.append(data)
-            except Exception as e:
-                print(f"Error reading {filename}: {e}")
-    # Sort by date
-    trek_routes.sort(key=lambda x: x["date"])
-    return trek_routes
+    return _load_trek_route_dicts(trek_id)

@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Loader2, Activity, Clock, MapPin, Gauge, ChevronLeft, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
+import { Loader2, Activity, Clock, Gauge, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, LineChart, Download } from 'lucide-react';
 import ActivityCard from './ActivityCard';
 import ActivityDetails from './ActivityDetails';
+import ActivityExportModal from './ActivityExportModal';
 import { API_BASE_URL } from '../config';
 
-const TrainingPlanner = () => {
+const TrainingPlanner = ({ onOpenAcwrCharts }) => {
   const [allActivities, setAllActivities] = useState([]);
   const [filters, setFilters] = useState({ run: true, swim: true, bike: true });
   const [weekOffset, setWeekOffset] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedActivity, setSelectedActivity] = useState(null);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   useEffect(() => {
     fetchActivities();
@@ -105,7 +107,7 @@ const TrainingPlanner = () => {
 
   if (isLoading && allActivities.length === 0) {
     return (
-      <div className="planner-loading">
+      <div className="planner-loading training-planner-container">
         <Loader2 className="animate-spin" size={48} />
         <p>Récupération de vos activités Garmin...</p>
       </div>
@@ -128,45 +130,78 @@ const TrainingPlanner = () => {
   };
 
   if (selectedActivity) {
-    return <ActivityDetails activity={selectedActivity} onBack={() => setSelectedActivity(null)} />;
+    return (
+      <div className="activity-details-page">
+        <ActivityDetails activity={selectedActivity} onBack={() => setSelectedActivity(null)} />
+      </div>
+    );
   }
 
   return (
     <div className="training-planner-container">
+      {showExportModal && (
+        <ActivityExportModal
+          activities={allActivities}
+          onClose={() => setShowExportModal(false)}
+        />
+      )}
       <div className="planner-header">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', width: '100%', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
+        <div className="planner-header-top">
+          <div className="planner-title-block">
             <h1>Mon Entraînement</h1>
             <p className="subtitle">{weekOffset === 0 ? "Cette semaine" : formatWeekRange()}</p>
           </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '1rem' }}>
-            <div className="week-nav">
-                <button className="icon-btn small" onClick={() => setWeekOffset(weekOffset + 1)} title="Semaine précédente">
-                <ChevronLeft size={20} />
-                </button>
-                <button className="btn glass-panel" style={{ padding: '0.5rem 1rem' }} onClick={() => setWeekOffset(0)} disabled={weekOffset === 0}>
-                Aujourd'hui
-                </button>
-                <button className="icon-btn small" onClick={() => setWeekOffset(Math.max(0, weekOffset - 1))} title="Semaine suivante" disabled={weekOffset === 0}>
-                <ChevronRight size={20} />
-                </button>
-            </div>
+        </div>
 
-            <div className="sport-filters glass-panel">
-                <label className="filter-item">
-                    <input type="checkbox" checked={filters.run} onChange={() => setFilters({...filters, run: !filters.run})} />
-                    <span>Run</span>
-                </label>
-                <label className="filter-item">
-                    <input type="checkbox" checked={filters.bike} onChange={() => setFilters({...filters, bike: !filters.bike})} />
-                    <span>Bike</span>
-                </label>
-                <label className="filter-item">
-                    <input type="checkbox" checked={filters.swim} onChange={() => setFilters({...filters, swim: !filters.swim})} />
-                    <span>Swim</span>
-                </label>
-            </div>
+        <div className="planner-toolbar">
+          <div className="week-nav">
+            <button type="button" className="icon-btn small" onClick={() => setWeekOffset(weekOffset + 1)} title="Semaine précédente" aria-label="Semaine précédente">
+              <ChevronLeft size={20} />
+            </button>
+            <button type="button" className="btn glass-panel planner-nav-today" onClick={() => setWeekOffset(0)} disabled={weekOffset === 0}>
+              Aujourd'hui
+            </button>
+            <button type="button" className="icon-btn small" onClick={() => setWeekOffset(Math.max(0, weekOffset - 1))} title="Semaine suivante" disabled={weekOffset === 0} aria-label="Semaine suivante">
+              <ChevronRight size={20} />
+            </button>
+          </div>
+
+          <div className="planner-action-buttons">
+            <button
+              type="button"
+              className="btn glass-panel planner-action-btn"
+              onClick={() => setShowExportModal(true)}
+              title="Exporter les activités pour un LLM"
+            >
+              <Download size={18} />
+              <span>Export LLM</span>
+            </button>
+            {onOpenAcwrCharts && (
+              <button
+                type="button"
+                className="btn glass-panel planner-action-btn"
+                onClick={onOpenAcwrCharts}
+                title="Voir l'évolution ACWR et la zone cible"
+              >
+                <LineChart size={18} />
+                <span>ACWR</span>
+              </button>
+            )}
+          </div>
+
+          <div className="sport-filters glass-panel">
+            <label className="filter-item">
+              <input type="checkbox" checked={filters.run} onChange={() => setFilters({ ...filters, run: !filters.run })} />
+              <span>Run</span>
+            </label>
+            <label className="filter-item">
+              <input type="checkbox" checked={filters.bike} onChange={() => setFilters({ ...filters, bike: !filters.bike })} />
+              <span>Bike</span>
+            </label>
+            <label className="filter-item">
+              <input type="checkbox" checked={filters.swim} onChange={() => setFilters({ ...filters, swim: !filters.swim })} />
+              <span>Swim</span>
+            </label>
           </div>
         </div>
       </div>

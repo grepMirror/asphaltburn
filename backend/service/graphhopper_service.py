@@ -1,5 +1,4 @@
 import requests
-import json
 import math
 import gpxpy.gpx
 from schemas import Waypoint, RouteSegment
@@ -26,12 +25,8 @@ class GraphHopperService:
             "calc_points": "true",
             "points_encoded": "false",
             "elevation": "true",
-            "details": ["road_class"]
+            "details": ["road_class"],
         }
-
-        # requests.get doesn't handle multiple 'point' params correctly if passed as a list of strings
-        # unless we use the 'params' argument with a list of tuples or similar.
-        # Actually, requests handles a list of values for the same key.
 
         try:
             response = requests.get(cls.ROUTE_URL, params=params)
@@ -39,7 +34,7 @@ class GraphHopperService:
             data = response.json()
 
             path = data["paths"][0]
-            points = path["points"]["coordinates"] # [lng, lat, elev]
+            points = path["points"]["coordinates"]  # [lng, lat, elev]
 
             all_coordinates = [[p[1], p[0]] for p in points]
             total_distance_m = path["distance"]

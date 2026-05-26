@@ -1,9 +1,50 @@
-import requests
-import gpxpy.gpx
-import re
-import math
+import copy
 import json
+import math
+import re
+from collections import OrderedDict
+
+import gpxpy.gpx
+import requests
 from schemas import Waypoint, RouteSegment
+
+_SEGMENT_CACHE_MAX = 800
+
+
+class _SegmentLRUCache:
+    """LRU cache for raw IGN segment JSON keyed by rounded start/end (same legs reused when extending a trace)."""
+
+    __slots__ = ("_max", "_data")
+
+    def __init__(self, max_items: int = _SEGMENT_CACHE_MAX):
+        self._max = max_items
+        self._data: OrderedDict[str, dict] = OrderedDict()
+
+    @staticmethod
+    def _key(start: Waypoint, end: Waypoint) -> str:
+        return (
+            f"{start.lng:.6f},{start.lat:.6f}|"
+            f"{end.lng:.6f},{end.lat:.6f}"
+        )
+
+    def get(self, start: Waypoint, end: Waypoint) -> dict | None:
+        k = self._key(start, end)
+        if k not in self._data:
+            return None
+        self._data.move_to_end(k)
+        return copy.deepcopy(self._data[k])
+
+    def set(self, start: Waypoint, end: Waypoint, value: dict) -> None:
+        k = self._key(start, end)
+        if k in self._data:
+            self._data.move_to_end(k)
+        self._data[k] = copy.deepcopy(value)
+        while len(self._data) > self._max:
+            self._data.popitem(last=False)
+
+
+_segment_cache = _SegmentLRUCache()
+
 
 class IGNService:
     """
@@ -29,11 +70,19 @@ class IGNService:
         road_type_dist = {}
 
         for i in range(len(waypoints) - 1):
-            segment_data = cls._fetch_route_segment(waypoints[i], waypoints[i+1])
+            try:
+                segment_data = cls._fetch_route_segment(waypoints[i], waypoints[i + 1])
+            except requests.exceptions.HTTPError as e:
+                status = e.response.status_code if e.response is not None else "?"
+                body = (e.response.text[:500] if e.response is not None else "")
+                raise RuntimeError(
+                    f"IGN routing failed for segment {i + 1}→{i + 2} "
+                    f"({waypoints[i].lat:.5f},{waypoints[i].lng:.5f} → "
+                    f"{waypoints[i + 1].lat:.5f},{waypoints[i + 1].lng:.5f}): {status} {body}"
+                ) from e
 
-            # Global coordinates
-            segment_coords = segment_data.get("geometry", {}).get("coordinates", [])
-            lat_lngs = [[c[1], c[0]] for c in segment_coords]
+            # Global polyline: prefer full-route geometry; else stitch step geometries (some responses omit root geometry).
+            lat_lngs = cls._segment_polyline_lat_lngs(segment_data)
 
             if i == 0:
                 all_coordinates.extend(lat_lngs)
@@ -86,9 +135,45 @@ class IGNService:
             # "constraints": json.dumps({"key": "itineraire_vert", "operator": "=", "value": "vrai", "constraintType": "prefer"})
         }
 
-        response = requests.get(cls.NAVIGATION_URL, params=params)
+        cached = _segment_cache.get(start, end)
+        if cached is not None:
+            return cached
+
+        response = requests.get(cls.NAVIGATION_URL, params=params, timeout=60)
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        _segment_cache.set(start, end, data)
+        return data
+
+    @staticmethod
+    def _same_lat_lng(a: list[float], b: list[float], eps: float = 1e-5) -> bool:
+        return abs(a[0] - b[0]) < eps and abs(a[1] - b[1]) < eps
+
+    @staticmethod
+    def _lat_lng_from_geojson_coordinates(coords: list) -> list[list[float]]:
+        return [[c[1], c[0]] for c in coords]
+
+    @classmethod
+    def _segment_polyline_lat_lngs(cls, segment_data: dict) -> list[list[float]]:
+        geom = segment_data.get("geometry") or {}
+        root = geom.get("coordinates") or []
+        lat_lngs = cls._lat_lng_from_geojson_coordinates(root)
+        if lat_lngs:
+            return lat_lngs
+        merged: list[list[float]] = []
+        for portion in segment_data.get("portions", []):
+            for step in portion.get("steps", []):
+                step_coords = (step.get("geometry") or {}).get("coordinates") or []
+                step_ll = cls._lat_lng_from_geojson_coordinates(step_coords)
+                if not step_ll:
+                    continue
+                if not merged:
+                    merged.extend(step_ll)
+                elif cls._same_lat_lng(step_ll[0], merged[-1]):
+                    merged.extend(step_ll[1:])
+                else:
+                    merged.extend(step_ll)
+        return merged
 
     @classmethod
     def _process_segments_and_types(cls, data: dict, all_segments: list[RouteSegment], road_type_dist: dict[str, float]):

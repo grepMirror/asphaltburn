@@ -1,21 +1,16 @@
 from fastapi import APIRouter, HTTPException, Response
-from schemas import RouteRequest, RouteResponse, SearchResponse
+from schemas import CoordinatesElevationRequest, ElevationOnlyResponse, RouteRequest, RouteResponse, SearchResponse
 from service.ign_service import IGNService
-from service.graphhopper_service import GraphHopperService
 
 router = APIRouter(prefix="/api")
 
 @router.post("/route", response_model=RouteResponse)
 async def calculate_route(request: RouteRequest):
     try:
-        if request.provider == "graphhopper":
-            route_data = GraphHopperService.get_route(request.waypoints)
-        else:
-            route_data = IGNService.get_route(request.waypoints)
-            if "elevation_data" not in route_data and route_data.get("coordinates"):
-                route_data["elevation_data"] = IGNService.get_elevation_data(route_data["coordinates"])
+        route_data = IGNService.get_route(request.waypoints)
+        if not request.skip_elevation and "elevation_data" not in route_data and route_data.get("coordinates"):
+            route_data["elevation_data"] = IGNService.get_elevation_data(route_data["coordinates"])
 
-        # GraphHopper already calculates elevation gain/loss, IGN manually fetched it above
         elev_data = route_data.get("elevation_data", {"gain": 0.0, "loss": 0.0, "profile": []})
 
         return RouteResponse(
@@ -29,6 +24,27 @@ async def calculate_route(request: RouteRequest):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/route/elevation", response_model=ElevationOnlyResponse)
+async def elevation_for_coordinates(body: CoordinatesElevationRequest):
+    """IGN altimetry only (background D+/profile after a skip_elevation route)."""
+    try:
+        if len(body.coordinates) < 2:
+            return ElevationOnlyResponse(
+                elevation_gain_m=0.0,
+                elevation_loss_m=0.0,
+                elevation_profile=[],
+            )
+        elev = IGNService.get_elevation_data(body.coordinates)
+        return ElevationOnlyResponse(
+            elevation_gain_m=elev["gain"],
+            elevation_loss_m=elev["loss"],
+            elevation_profile=elev["profile"],
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/search", response_model=list[SearchResponse])
 async def search_city(q: str):
