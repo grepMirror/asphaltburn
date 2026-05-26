@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
-import { Trash2, MapPin, Calendar, ArrowRight, Loader, X, Folder, ChevronRight, ChevronDown, Plus, Archive, Share2 } from 'lucide-react';
-import { downloadBlob, shareFilesOrDownloadFirst } from '../utils/shareExport';
+import { Trash2, MapPin, Calendar, ArrowRight, Loader, X, Folder, ChevronRight, ChevronDown, Plus, Archive, LogOut } from 'lucide-react';
+import { downloadBlob } from '../utils/shareExport';
+import PinPrompt, { getStoredPin, clearStoredPin } from './PinPrompt';
 
 const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
   const [routes, setRoutes] = useState([]);
@@ -10,20 +11,26 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
   const [error, setError] = useState(null);
   const [expandedTreks, setExpandedTreks] = useState({});
   const [trekZipBusyId, setTrekZipBusyId] = useState(null);
+  const [pin, setPin] = useState(getStoredPin());
 
   useEffect(() => {
-    fetchRoutes();
-  }, []);
+    if (pin) fetchRoutes();
+  }, [pin]);
 
   const fetchRoutes = async () => {
     setIsLoading(true);
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/saved-routes`);
+      const response = await axios.get(`${API_BASE_URL}/api/saved-routes`, { params: { pin } });
       setRoutes(response.data);
       setError(null);
     } catch (err) {
       console.error("Error fetching routes:", err);
-      setError("Impossible de charger les itinéraires enregistrés.");
+      if (err.response?.status === 401) {
+        clearStoredPin();
+        setPin(null);
+      } else {
+        setError("Impossible de charger les itinéraires enregistrés.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -34,7 +41,7 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
     if (!window.confirm("Voulez-vous vraiment supprimer cet itinéraire ?")) return;
 
     try {
-      await axios.delete(`${API_BASE_URL}/api/saved-routes/${id}`);
+      await axios.delete(`${API_BASE_URL}/api/saved-routes/${id}`, { params: { pin } });
       setRoutes(routes.filter(r => r.id !== id));
     } catch (err) {
       console.error("Error deleting route:", err);
@@ -44,7 +51,7 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
 
   const handleLoad = async (id) => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/saved-routes/${id}`);
+      const response = await axios.get(`${API_BASE_URL}/api/saved-routes/${id}`, { params: { pin } });
       onLoadRoute(response.data);
     } catch (err) {
       console.error("Error loading route:", err);
@@ -66,6 +73,7 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
 
   const fetchTrekZipBlob = async (trekId) => {
     const res = await axios.get(`${API_BASE_URL}/api/saved-routes/trek/${trekId}/export-gpx-zip`, {
+      params: { pin },
       responseType: 'blob',
     });
     return res.data;
@@ -85,26 +93,16 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
     }
   };
 
-  const handleShareTrekZip = async (e, trek) => {
-    e.stopPropagation();
-    setTrekZipBusyId(trek.id);
-    try {
-      const blob = await fetchTrekZipBlob(trek.id);
-      const fname = `${slugBase(trek.name)}-etapes.zip`;
-      const file = new File([blob], fname, { type: 'application/zip' });
-      await shareFilesOrDownloadFirst([file], { title: fname });
-    } catch (err) {
-      if (err?.name === 'AbortError') {
-        return;
-      }
-      console.error(err);
-      alert('Impossible de partager le ZIP du trek.');
-    } finally {
-      setTrekZipBusyId(null);
-    }
+  const handleLogout = () => {
+    clearStoredPin();
+    setPin(null);
+    setRoutes([]);
   };
 
-  // Group routes by trek
+  if (!pin) {
+    return <PinPrompt onAuthenticated={(p) => setPin(p)} />;
+  }
+
   const groupedRoutes = routes.reduce((acc, route) => {
     if (route.trek_id) {
       if (!acc.treks[route.trek_id]) {
@@ -121,7 +119,6 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
     return acc;
   }, { treks: {}, standalone: [] });
 
-  // Sort trek routes by date (earliest first, as steps)
   Object.values(groupedRoutes.treks).forEach((trek) => {
     trek.routes.sort((a, b) => new Date(a.date) - new Date(b.date));
   });
@@ -140,9 +137,15 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
     <div className="saved-routes-container glass-panel">
       <div className="saved-routes-header">
         <h2>Itinéraires enregistrés</h2>
-        <button className="icon-btn" onClick={onBack}>
-          <X size={24} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{pin}</span>
+          <button className="icon-btn small" onClick={handleLogout} title="Changer d'utilisateur">
+            <LogOut size={16} />
+          </button>
+          <button className="icon-btn" onClick={onBack}>
+            <X size={24} />
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -163,7 +166,6 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
         </div>
       ) : (
         <div className="routes-list">
-          {/* Render Treks */}
           {Object.values(groupedRoutes.treks).map((trek) => {
             const totals = trekCumulativeTotals(trek.routes);
             return (
@@ -194,15 +196,6 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
                     onClick={(e) => handleDownloadTrekZip(e, trek)}
                   >
                     <Archive size={18} />
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-btn small trek-export-btn"
-                    disabled={trekZipBusyId === trek.id}
-                    title="Partager le ZIP (Drive, Fichiers…)"
-                    onClick={(e) => handleShareTrekZip(e, trek)}
-                  >
-                    <Share2 size={18} />
                   </button>
                   <button 
                     className="btn primary small create-step-btn" 
@@ -255,7 +248,6 @@ const SavedRoutes = ({ onLoadRoute, onCreateTrekStep, onBack }) => {
             );
           })}
 
-          {/* Render Standalone Routes */}
           {groupedRoutes.standalone.map(route => (
             <div 
               key={route.id} 

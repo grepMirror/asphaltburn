@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import MapComponent from './components/MapComponent';
 import Dashboard from './components/Dashboard';
@@ -6,6 +6,7 @@ import TopRightMenu from './components/TopRightMenu';
 import TrainingPlanner from './components/TrainingPlanner';
 import AcwrChartsPage from './components/AcwrChartsPage';
 import SavedRoutes from './components/SavedRoutes';
+import PinPrompt, { getStoredPin } from './components/PinPrompt';
 import './App.css';
 import L from 'leaflet';
 import { API_BASE_URL } from './config';
@@ -79,6 +80,8 @@ function App() {
   const [view, setView] = useState('map'); // 'map', 'training', 'saved', or 'acwr'
   const [dashboardOpen, setDashboardOpen] = useState(false); // mobile dashboard toggle
   const [mapBounds, setMapBounds] = useState(null);
+  const [showPinPrompt, setShowPinPrompt] = useState(false);
+  const [pendingSaveAfterPin, setPendingSaveAfterPin] = useState(false);
 
   const isMobile = useIsMobile();
 
@@ -281,9 +284,9 @@ function App() {
     reader.readAsText(file);
   };
   
-  const handleSaveRoute = async () => {
+  const doSaveRoute = useCallback(async (pin) => {
     if (waypoints.length < 2) return;
-    
+
     const defaultName = `Itinéraire ${routeInfo.distance_km.toFixed(1)}km - ${new Date().toLocaleDateString('fr-FR')}`;
     const name = window.prompt("Nom de l'itinéraire :", defaultName);
     if (!name) return;
@@ -305,31 +308,47 @@ function App() {
         savedRoute.trek_id = btoa(trekNameInput).substring(0, 8);
       }
     } else {
-      // Confirm saving within active trek
       if (!window.confirm(`Enregistrer ce segment comme nouvelle étape du trek "${activeTrek.name}" ?`)) return;
     }
 
     try {
-      await axios.post(`${API_BASE_URL}/api/saved-routes`, savedRoute);
+      await axios.post(`${API_BASE_URL}/api/saved-routes`, savedRoute, { params: { pin } });
       alert("Itinéraire enregistré !");
     } catch (error) {
       console.error("Error saving route:", error);
       alert("Erreur lors de l'enregistrement de l'itinéraire.");
     }
+  }, [waypoints, routeInfo, activeTrek]);
+
+  const handleSaveRoute = () => {
+    if (waypoints.length < 2) return;
+    const pin = getStoredPin();
+    if (!pin) {
+      setPendingSaveAfterPin(true);
+      setShowPinPrompt(true);
+      return;
+    }
+    doSaveRoute(pin);
+  };
+
+  const handlePinAuthenticated = (pin) => {
+    setShowPinPrompt(false);
+    if (pendingSaveAfterPin) {
+      setPendingSaveAfterPin(false);
+      doSaveRoute(pin);
+    }
   };
 
   const handleLoadRoute = async (savedRoute) => {
     setRouteError(null);
-    // We set waypoints, which will trigger the route useEffect (debounced recalculation).
     setWaypoints(savedRoute.waypoints);
     setRouteInfo(savedRoute.route_data);
-    
-    // Fetch trek companions if needed
+
     if (savedRoute.trek_id) {
       setActiveTrek({ id: savedRoute.trek_id, name: savedRoute.trek_name });
+      const pin = getStoredPin();
       try {
-        const response = await axios.get(`${API_BASE_URL}/api/saved-routes/trek/${savedRoute.trek_id}`);
-        // Filter out the current route
+        const response = await axios.get(`${API_BASE_URL}/api/saved-routes/trek/${savedRoute.trek_id}`, { params: { pin } });
         setTrekRoutes(response.data.filter(r => r.id !== savedRoute.id));
       } catch (error) {
         console.error("Error fetching trek routes:", error);
@@ -338,7 +357,7 @@ function App() {
       setTrekRoutes([]);
       setActiveTrek(null);
     }
-    
+
     setView('map');
   };
 
@@ -347,14 +366,15 @@ function App() {
     setRouteInfo(emptyRouteInfo());
     setRouteError(null);
     setActiveTrek({ id: trekId, name: trekName });
-    
+
+    const pin = getStoredPin();
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/saved-routes/trek/${trekId}`);
+      const response = await axios.get(`${API_BASE_URL}/api/saved-routes/trek/${trekId}`, { params: { pin } });
       setTrekRoutes(response.data);
     } catch (error) {
       console.error("Error fetching trek routes:", error);
     }
-    
+
     setView('map');
   };
 
@@ -473,6 +493,10 @@ function App() {
             <X size={18} />
           </button>
         </div>
+      )}
+
+      {showPinPrompt && (
+        <PinPrompt onAuthenticated={handlePinAuthenticated} />
       )}
     </div>
   );

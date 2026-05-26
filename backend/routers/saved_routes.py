@@ -5,7 +5,7 @@ import re
 import uuid
 import zipfile
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 
 from schemas import SavedRoute, SavedRouteMetadata
 from service.ign_service import IGNService
@@ -17,13 +17,22 @@ STORAGE_DIR = "saved_routes"
 if not os.path.exists(STORAGE_DIR):
     os.makedirs(STORAGE_DIR)
 
+
+def _user_dir(pin: str) -> str:
+    user_dir = os.path.join(STORAGE_DIR, pin)
+    if not os.path.isdir(user_dir):
+        raise HTTPException(status_code=401, detail="Utilisateur introuvable. Veuillez vous connecter.")
+    return user_dir
+
+
 @router.get("", response_model=list[SavedRouteMetadata])
-async def list_routes():
+async def list_routes(pin: str = Query(...)):
+    user_dir = _user_dir(pin)
     routes = []
-    for filename in os.listdir(STORAGE_DIR):
+    for filename in os.listdir(user_dir):
         if filename.endswith(".json"):
             try:
-                with open(os.path.join(STORAGE_DIR, filename), "r", encoding="utf-8") as f:
+                with open(os.path.join(user_dir, filename), "r", encoding="utf-8") as f:
                     data = json.load(f)
                     routes.append(SavedRouteMetadata(
                         id=data["id"],
@@ -36,22 +45,23 @@ async def list_routes():
                     ))
             except Exception as e:
                 print(f"Error reading {filename}: {e}")
-    # Sort by date descending
     routes.sort(key=lambda x: x.date, reverse=True)
     return routes
+
 
 def _slug_filename(name: str, max_len: int = 48) -> str:
     slug = re.sub(r"[^\w\-]+", "_", name, flags=re.UNICODE).strip("_") or "etape"
     return slug[:max_len]
 
 
-def _load_trek_route_dicts(trek_id: str) -> list[dict]:
+def _load_trek_route_dicts(pin: str, trek_id: str) -> list[dict]:
+    user_dir = _user_dir(pin)
     trek_routes: list[dict] = []
-    for filename in os.listdir(STORAGE_DIR):
+    for filename in os.listdir(user_dir):
         if not filename.endswith(".json"):
             continue
         try:
-            with open(os.path.join(STORAGE_DIR, filename), "r", encoding="utf-8") as f:
+            with open(os.path.join(user_dir, filename), "r", encoding="utf-8") as f:
                 data = json.load(f)
                 if data.get("trek_id") == trek_id:
                     trek_routes.append(data)
@@ -62,9 +72,8 @@ def _load_trek_route_dicts(trek_id: str) -> list[dict]:
 
 
 @router.get("/trek/{trek_id}/export-gpx-zip")
-async def export_trek_gpx_zip(trek_id: str):
-    """One ZIP containing one GPX per trek step (ordered by saved date)."""
-    trek_routes = _load_trek_route_dicts(trek_id)
+async def export_trek_gpx_zip(trek_id: str, pin: str = Query(...)):
+    trek_routes = _load_trek_route_dicts(pin, trek_id)
     if not trek_routes:
         raise HTTPException(status_code=404, detail="Trek introuvable ou sans étapes")
 
@@ -91,35 +100,40 @@ async def export_trek_gpx_zip(trek_id: str):
 
 
 @router.get("/{route_id}", response_model=SavedRoute)
-async def get_route(route_id: str):
-    file_path = os.path.join(STORAGE_DIR, f"{route_id}.json")
+async def get_route(route_id: str, pin: str = Query(...)):
+    user_dir = _user_dir(pin)
+    file_path = os.path.join(user_dir, f"{route_id}.json")
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Route not found")
-    
+
     with open(file_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
+
 @router.post("", response_model=SavedRoute)
-async def save_route(route: SavedRoute):
-    # If ID is not provided or is "new", generate one
+async def save_route(route: SavedRoute, pin: str = Query(...)):
+    user_dir = _user_dir(pin)
     if not route.id or route.id == "new":
         route.id = str(uuid.uuid4())
-    
-    file_path = os.path.join(STORAGE_DIR, f"{route.id}.json")
+
+    file_path = os.path.join(user_dir, f"{route.id}.json")
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(route.model_dump(), f, ensure_ascii=False, indent=2)
-    
+
     return route
 
+
 @router.delete("/{route_id}")
-async def delete_route(route_id: str):
-    file_path = os.path.join(STORAGE_DIR, f"{route_id}.json")
+async def delete_route(route_id: str, pin: str = Query(...)):
+    user_dir = _user_dir(pin)
+    file_path = os.path.join(user_dir, f"{route_id}.json")
     if not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Route not found")
-    
+
     os.remove(file_path)
     return {"message": "Route deleted"}
 
+
 @router.get("/trek/{trek_id}", response_model=list[SavedRoute])
-async def get_trek_routes(trek_id: str):
-    return _load_trek_route_dicts(trek_id)
+async def get_trek_routes(trek_id: str, pin: str = Query(...)):
+    return _load_trek_route_dicts(pin, trek_id)
