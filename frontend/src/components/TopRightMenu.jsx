@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Upload, Download, X, Calendar, Map as MapIcon, RotateCcw, List, Menu } from 'lucide-react';
+import { Search, Upload, Download, X, Map as MapIcon, RotateCcw, List, Menu } from 'lucide-react';
 import SearchBar from './SearchBar';
 
 const useIsMobile = () => {
@@ -86,13 +86,6 @@ const TopRightMenu = ({ onCitySelect, onExport, onImport, onUndo, waypointsCount
               <span>Carte</span>
             </button>
             <button
-              className={`mobile-menu-item ${currentView === 'training' || currentView === 'acwr' ? 'active' : ''}`}
-              onClick={() => handleMobileAction(() => onViewChange('training'))}
-            >
-              <Calendar size={18} />
-              <span>Entraînement</span>
-            </button>
-            <button
               className={`mobile-menu-item ${currentView === 'saved' ? 'active' : ''}`}
               onClick={() => handleMobileAction(() => onViewChange('saved'))}
             >
@@ -152,14 +145,6 @@ const TopRightMenu = ({ onCitySelect, onExport, onImport, onUndo, waypointsCount
             title="Map Planner"
           >
             <MapIcon size={20} />
-          </button>
-          
-          <button 
-            className={`icon-btn ${currentView === 'training' || currentView === 'acwr' ? 'active' : ''}`} 
-            onClick={() => onViewChange('training')} 
-            title="Training Calendar"
-          >
-            <Calendar size={20} />
           </button>
 
           <button 

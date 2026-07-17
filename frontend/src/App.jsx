@@ -3,8 +3,6 @@ import axios from 'axios';
 import MapComponent from './components/MapComponent';
 import Dashboard from './components/Dashboard';
 import TopRightMenu from './components/TopRightMenu';
-import TrainingPlanner from './components/TrainingPlanner';
-import AcwrChartsPage from './components/AcwrChartsPage';
 import SavedRoutes from './components/SavedRoutes';
 import PinPrompt, { getStoredPin } from './components/PinPrompt';
 import './App.css';
@@ -77,14 +75,89 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isElevationLoading, setIsElevationLoading] = useState(false);
   const [routeError, setRouteError] = useState(null);
-  const [view, setView] = useState('map'); // 'map', 'training', 'saved', or 'acwr'
+  const [view, setView] = useState('map'); // 'map' | 'saved'
   const [dashboardOpen, setDashboardOpen] = useState(false); // mobile dashboard toggle
   const [mapBounds, setMapBounds] = useState(null);
   const [showPinPrompt, setShowPinPrompt] = useState(false);
   const [pendingSaveAfterPin, setPendingSaveAfterPin] = useState(false);
-  const [insertMode, setInsertMode] = useState(null); // null or { afterIndex: number }
+  const [insertMode, setInsertMode] = useState(null); // null or { afterIndex: number, originIndex: number }
+  const [undoStack, setUndoStack] = useState([]); // snapshots: { waypoints, insertMode }
+  const [elevationHoverPoint, setElevationHoverPoint] = useState(null);
 
   const isMobile = useIsMobile();
+
+  const handleElevationHover = (point) => {
+    if (!point) {
+      setElevationHoverPoint(null);
+      return;
+    }
+
+    const lat = Number(point.lat);
+    const lng = Number(point.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      setElevationHoverPoint({
+        lat,
+        lng,
+        distance: Number(point.distance) || 0,
+        elevation: Number(point.elevation) || 0,
+      });
+      return;
+    }
+
+    // Fallback: place by distance along the drawn route
+    const coords = routeInfo.coordinates;
+    if (!coords?.length) {
+      setElevationHoverPoint(null);
+      return;
+    }
+    const totalKm = routeInfo.distance_km || 0;
+    const targetKm = Math.max(0, Number(point.distance) || 0);
+    if (!totalKm) {
+      setElevationHoverPoint({
+        lat: coords[0][0],
+        lng: coords[0][1],
+        distance: targetKm,
+        elevation: Number(point.elevation) || 0,
+      });
+      return;
+    }
+
+    let acc = 0;
+    for (let i = 1; i < coords.length; i++) {
+      const p1 = L.latLng(coords[i - 1][0], coords[i - 1][1]);
+      const p2 = L.latLng(coords[i][0], coords[i][1]);
+      const segKm = p1.distanceTo(p2) / 1000;
+      if (acc + segKm >= targetKm) {
+        const t = segKm > 0 ? (targetKm - acc) / segKm : 0;
+        setElevationHoverPoint({
+          lat: coords[i - 1][0] + (coords[i][0] - coords[i - 1][0]) * t,
+          lng: coords[i - 1][1] + (coords[i][1] - coords[i - 1][1]) * t,
+          distance: targetKm,
+          elevation: Number(point.elevation) || 0,
+        });
+        return;
+      }
+      acc += segKm;
+    }
+
+    const last = coords[coords.length - 1];
+    setElevationHoverPoint({
+      lat: last[0],
+      lng: last[1],
+      distance: targetKm,
+      elevation: Number(point.elevation) || 0,
+    });
+  };
+
+  const pushUndoSnapshot = (currentWaypoints, currentInsertMode) => {
+    setUndoStack((stack) => [
+      ...stack,
+      {
+        waypoints: currentWaypoints.map((w) => ({ ...w })),
+        insertMode: currentInsertMode,
+      },
+    ]);
+  };
 
   const handleViewChange = (nextView) => {
     setView(nextView);
@@ -97,7 +170,13 @@ function App() {
     persistTrack(waypoints, activeTrek);
   }, [waypoints, activeTrek]);
 
-  // Debounced route (IGN) with skip_elevation; D+/profile filled via POST /api/route/elevation in the same turn.
+  useEffect(() => {
+    if (!routeInfo.elevation_profile?.length) {
+      setElevationHoverPoint(null);
+    }
+  }, [routeInfo.elevation_profile]);
+
+  // Debounced route; backend returns elevation directly when available
   useEffect(() => {
     if (waypoints.length < 2) {
       setRouteInfo(emptyRouteInfo());
@@ -108,24 +187,21 @@ function App() {
     }
 
     const routeController = new AbortController();
-    const elevController = new AbortController();
     const debounceTimer = setTimeout(() => {
       (async () => {
         setIsLoading(true);
-        setIsElevationLoading(false);
+        setIsElevationLoading(true);
         setRouteError(null);
-        let routeData = null;
         try {
           const response = await axios.post(
             `${API_BASE_URL}/api/route`,
-            { waypoints, skip_elevation: true },
+            { waypoints, skip_elevation: false },
             { signal: routeController.signal }
           );
           if (routeController.signal.aborted) {
             return;
           }
-          routeData = response.data;
-          setRouteInfo(routeData);
+          setRouteInfo(response.data);
         } catch (error) {
           if (isRouteRequestCancelled(error)) {
             return;
@@ -143,34 +219,6 @@ function App() {
           return;
         } finally {
           setIsLoading(false);
-        }
-
-        const coords = routeData?.coordinates;
-        if (!coords || coords.length < 2 || routeController.signal.aborted) {
-          return;
-        }
-
-        setIsElevationLoading(true);
-        try {
-          const elev = await axios.post(
-            `${API_BASE_URL}/api/route/elevation`,
-            { coordinates: coords },
-            { signal: elevController.signal }
-          );
-          if (elevController.signal.aborted) {
-            return;
-          }
-          setRouteInfo((prev) => ({
-            ...prev,
-            elevation_gain_m: elev.data.elevation_gain_m,
-            elevation_loss_m: elev.data.elevation_loss_m,
-            elevation_profile: elev.data.elevation_profile,
-          }));
-        } catch (err) {
-          if (!isRouteRequestCancelled(err)) {
-            console.error('Error fetching elevation:', err);
-          }
-        } finally {
           setIsElevationLoading(false);
         }
       })();
@@ -179,19 +227,22 @@ function App() {
     return () => {
       clearTimeout(debounceTimer);
       routeController.abort();
-      elevController.abort();
     };
   }, [waypoints]);
 
   const handleMapClick = (latlng) => {
     setRouteError(null);
     setSearchResult(null);
+    pushUndoSnapshot(waypoints, insertMode);
     if (insertMode !== null) {
       const newWaypoints = [...waypoints];
       const insertAt = insertMode.afterIndex + 1;
       newWaypoints.splice(insertAt, 0, { lat: latlng.lat, lng: latlng.lng });
       setWaypoints(newWaypoints);
-      setInsertMode({ afterIndex: insertAt, originIndex: insertMode.originIndex });
+      setInsertMode({
+        afterIndex: insertAt,
+        originIndex: insertMode.originIndex ?? insertMode.afterIndex,
+      });
     } else {
       setWaypoints([...waypoints, { lat: latlng.lat, lng: latlng.lng }]);
     }
@@ -206,6 +257,7 @@ function App() {
   };
 
   const handleMarkerDrag = (index, newLatlng) => {
+    pushUndoSnapshot(waypoints, insertMode);
     const newWaypoints = [...waypoints];
     newWaypoints[index] = { lat: newLatlng.lat, lng: newLatlng.lng };
     setWaypoints(newWaypoints);
@@ -216,17 +268,17 @@ function App() {
   };
 
   const handleUndo = () => {
-    if (waypoints.length === 0) return;
-
-    if (insertMode !== null && insertMode.afterIndex !== insertMode.originIndex) {
-      const newWaypoints = [...waypoints];
-      newWaypoints.splice(insertMode.afterIndex, 1);
-      setWaypoints(newWaypoints);
-      setInsertMode({ afterIndex: insertMode.afterIndex - 1, originIndex: insertMode.originIndex });
-    } else {
-      setWaypoints(waypoints.slice(0, -1));
-      setInsertMode(null);
+    if (undoStack.length > 0) {
+      const snapshot = undoStack[undoStack.length - 1];
+      setUndoStack((stack) => stack.slice(0, -1));
+      setWaypoints(snapshot.waypoints);
+      setInsertMode(snapshot.insertMode);
+      return;
     }
+    // Fallback when waypoints were loaded with an empty stack (e.g. from localStorage)
+    if (waypoints.length === 0) return;
+    setWaypoints(waypoints.slice(0, -1));
+    setInsertMode(null);
   };
 
   const handleReset = () => {
@@ -235,6 +287,7 @@ function App() {
     setActiveTrek(null);
     setRouteError(null);
     setInsertMode(null);
+    setUndoStack([]);
   };
 
   const handleExportGPX = async () => {
@@ -308,6 +361,8 @@ function App() {
       }
 
       setWaypoints(newWaypoints);
+      setInsertMode(null);
+      setUndoStack([]);
     };
     reader.readAsText(file);
   };
@@ -371,6 +426,8 @@ function App() {
     setRouteError(null);
     setWaypoints(savedRoute.waypoints);
     setRouteInfo(savedRoute.route_data);
+    setInsertMode(null);
+    setUndoStack([]);
 
     if (savedRoute.trek_id) {
       setActiveTrek({ id: savedRoute.trek_id, name: savedRoute.trek_name });
@@ -393,6 +450,8 @@ function App() {
     setWaypoints([]);
     setRouteInfo(emptyRouteInfo());
     setRouteError(null);
+    setInsertMode(null);
+    setUndoStack([]);
     setActiveTrek({ id: trekId, name: trekName });
 
     const pin = getStoredPin();
@@ -433,6 +492,8 @@ function App() {
             isMobile={isMobile}
             onBoundsChange={setMapBounds}
             insertMode={insertMode}
+            elevationHoverPoint={elevationHoverPoint}
+            elevationProfile={routeInfo.elevation_profile}
           />
 
           {insertMode !== null && (
@@ -459,21 +520,17 @@ function App() {
             onSave={handleSaveRoute}
             activeTrek={activeTrek}
             elevationLoading={isElevationLoading}
+            onElevationHover={handleElevationHover}
+            elevationHoverActive={!!elevationHoverPoint}
           />
         </>
       ) : (
         <div className="app-page">
-          {view === 'training' ? (
-            <TrainingPlanner onOpenAcwrCharts={() => setView('acwr')} />
-          ) : view === 'acwr' ? (
-            <AcwrChartsPage onBack={() => setView('training')} />
-          ) : (
-            <SavedRoutes 
-              onLoadRoute={handleLoadRoute}
-              onCreateTrekStep={handleCreateTrekStep}
-              onBack={() => setView('map')} 
-            />
-          )}
+          <SavedRoutes
+            onLoadRoute={handleLoadRoute}
+            onCreateTrekStep={handleCreateTrekStep}
+            onBack={() => setView('map')}
+          />
         </div>
       )}
 

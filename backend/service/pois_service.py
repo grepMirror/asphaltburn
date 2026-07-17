@@ -13,12 +13,11 @@ def get_outdoor_pois(min_lat: float, min_lon: float, max_lat: float, max_lon: fl
     query = f"""
     [out:json][timeout:25];
     (
-      node["tourism"~"camping|caravan_site|alpine_hut|wilderness_hut"]({min_lat},{min_lon},{max_lat},{max_lon});
+      node["tourism"~"camping|caravan_site|alpine_hut"]({min_lat},{min_lon},{max_lat},{max_lon});
       node["amenity"~"drinking_water|toilets"]({min_lat},{min_lon},{max_lat},{max_lon});
       node["shop"~"supermarket|convenience|bakery"]({min_lat},{min_lon},{max_lat},{max_lon});
-      node["shelter_type"~"bivouac_site|rock_shelter"]({min_lat},{min_lon},{max_lat},{max_lon});
       
-      way["tourism"~"camping|caravan_site|alpine_hut|wilderness_hut|shelter"]({min_lat},{min_lon},{max_lat},{max_lon});
+      way["tourism"~"camping|caravan_site|alpine_hut|wilderness_hut"]({min_lat},{min_lon},{max_lat},{max_lon});
     );
     out body;
     >;

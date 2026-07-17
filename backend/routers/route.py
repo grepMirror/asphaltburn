@@ -1,13 +1,15 @@
 from fastapi import APIRouter, HTTPException, Response
 from schemas import CoordinatesElevationRequest, ElevationOnlyResponse, RouteRequest, RouteResponse, SearchResponse
 from service.ign_service import IGNService
+from service.routing import get_routing_service
 
 router = APIRouter(prefix="/api")
 
 @router.post("/route", response_model=RouteResponse)
 async def calculate_route(request: RouteRequest):
     try:
-        route_data = IGNService.get_route(request.waypoints)
+        routing = get_routing_service()
+        route_data = routing.get_route(request.waypoints)
         if not request.skip_elevation and "elevation_data" not in route_data and route_data.get("coordinates"):
             route_data["elevation_data"] = IGNService.get_elevation_data(route_data["coordinates"])
 

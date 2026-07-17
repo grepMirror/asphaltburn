@@ -1,9 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { LayersControl, WMSTileLayer, MapContainer, TileLayer, Polyline, Marker, CircleMarker, useMapEvents, useMap, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import LocationButton from './LocationButton';
 import CompassButton from './CompassButton';
+import PoiLayer from './PoiLayer';
+import TraceStyleToggle from './TraceStyleToggle';
 
 // Color map for road types (synced with Dashboard.jsx)
 const ROAD_TYPE_COLORS = {
@@ -16,6 +18,46 @@ const ROAD_TYPE_COLORS = {
   "Autre": "#64748b",           // Slate
   "Default": "#0040a1"          // Premium Blue
 };
+
+/** Flat/downhill → green; climbs → lime → yellow → orange → red by grade %. */
+function gradeToColor(gradePercent) {
+  if (gradePercent <= 0.5) return '#10b981'; // flat / downhill
+  if (gradePercent < 3) return '#84cc16';    // gentle climb
+  if (gradePercent < 6) return '#eab308';    // moderate
+  if (gradePercent < 10) return '#f97316';   // steep
+  return '#ef4444';                         // very steep
+}
+
+function buildElevationSegments(profile) {
+  if (!profile || profile.length < 2) return [];
+
+  const segments = [];
+  for (let i = 1; i < profile.length; i++) {
+    const a = profile[i - 1];
+    const b = profile[i];
+    const lat1 = Number(a.lat);
+    const lng1 = Number(a.lng);
+    const lat2 = Number(b.lat);
+    const lng2 = Number(b.lng);
+    if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) continue;
+
+    const distM = (Number(b.distance) - Number(a.distance)) * 1000;
+    const riseM = Number(b.elevation) - Number(a.elevation);
+    const grade = distM > 1 ? (riseM / distM) * 100 : 0;
+    const color = gradeToColor(grade);
+
+    const last = segments[segments.length - 1];
+    if (last && last.color === color) {
+      last.coordinates.push([lat2, lng2]);
+    } else {
+      segments.push({
+        color,
+        coordinates: [[lat1, lng1], [lat2, lng2]],
+      });
+    }
+  }
+  return segments;
+}
 
 // Fix for default marker icons in Leaflet with Vite
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -46,6 +88,17 @@ const kmIcon = (km) => {
     html: `<span>${km}km</span>`,
     iconSize: [40, 20],
     iconAnchor: [20, 10]
+  });
+};
+
+const elevationHoverIcon = (distance, elevation) => {
+  const km = Number(distance).toFixed(1);
+  const alt = Math.round(Number(elevation) || 0);
+  return L.divIcon({
+    className: 'elevation-hover-marker',
+    html: `<div class="elevation-hover-pulse"></div><div class="elevation-hover-dot"></div><div class="elevation-hover-label">${km} km · ${alt} m</div>`,
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
   });
 };
 
@@ -106,8 +159,34 @@ const getKmMarkers = (coords) => {
 };
 
 
-const MapComponent = ({ waypoints, trekRoutes, routeCoordinates, segments, onMapClick, onMarkerDrag, onMarkerClick, searchResult, isMobile, onBoundsChange, insertMode }) => {
+const MapComponent = ({
+  waypoints,
+  trekRoutes,
+  routeCoordinates,
+  segments,
+  elevationProfile,
+  onMapClick,
+  onMarkerDrag,
+  onMarkerClick,
+  searchResult,
+  isMobile,
+  onBoundsChange,
+  insertMode,
+  elevationHoverPoint,
+}) => {
+  const [colorMode, setColorMode] = useState('surface'); // 'surface' | 'elevation'
   const kmMarkers = getKmMarkers(routeCoordinates);
+  const elevationSegments = useMemo(
+    () => buildElevationSegments(elevationProfile),
+    [elevationProfile]
+  );
+  const hasElevation = elevationSegments.length > 0;
+
+  useEffect(() => {
+    if (colorMode === 'elevation' && !hasElevation) {
+      setColorMode('surface');
+    }
+  }, [colorMode, hasElevation]);
 
   return (
     <div className="map-container">
@@ -171,6 +250,15 @@ const MapComponent = ({ waypoints, trekRoutes, routeCoordinates, segments, onMap
           </>
         )}
 
+        <PoiLayer />
+        <TraceStyleToggle
+          colorMode={colorMode}
+          disabled={!hasElevation}
+          onToggle={() =>
+            setColorMode((mode) => (mode === 'surface' ? 'elevation' : 'surface'))
+          }
+        />
+
         {waypoints.map((wp, idx) => {
           const isActive = insertMode !== null && insertMode.afterIndex === idx;
           return (
@@ -203,6 +291,28 @@ const MapComponent = ({ waypoints, trekRoutes, routeCoordinates, segments, onMap
             zIndexOffset={500}
           />
         ))}
+
+        {elevationHoverPoint && Number.isFinite(Number(elevationHoverPoint.lat)) && Number.isFinite(Number(elevationHoverPoint.lng)) && (
+          <>
+            <CircleMarker
+              center={[Number(elevationHoverPoint.lat), Number(elevationHoverPoint.lng)]}
+              radius={9}
+              pathOptions={{
+                color: '#ffffff',
+                weight: 3,
+                fillColor: '#10b981',
+                fillOpacity: 1,
+              }}
+              interactive={false}
+            />
+            <Marker
+              position={[Number(elevationHoverPoint.lat), Number(elevationHoverPoint.lng)]}
+              icon={elevationHoverIcon(elevationHoverPoint.distance, elevationHoverPoint.elevation)}
+              zIndexOffset={2000}
+              interactive={false}
+            />
+          </>
+        )}
 
 
         {/* Companion Trek Routes (Low Opacity) */}
@@ -248,8 +358,18 @@ const MapComponent = ({ waypoints, trekRoutes, routeCoordinates, segments, onMap
           );
         })}
 
-        {/* Color-coded segments */}
-        {segments && segments.length > 0 ? (
+        {/* Trace coloring: surface (road type) or elevation grade */}
+        {colorMode === 'elevation' && hasElevation ? (
+          elevationSegments.map((seg, idx) => (
+            <Polyline
+              key={`elev-seg-${idx}`}
+              positions={seg.coordinates}
+              color={seg.color}
+              weight={6}
+              opacity={0.95}
+            />
+          ))
+        ) : segments && segments.length > 0 ? (
           segments.map((seg, idx) => (
             <Polyline
               key={`seg-${idx}-${seg.coordinates.length}-${seg.nature}`}
@@ -260,7 +380,6 @@ const MapComponent = ({ waypoints, trekRoutes, routeCoordinates, segments, onMap
             />
           ))
         ) : (
-          // Fallback if no segments yet
           routeCoordinates.length > 0 && (
             <Polyline
               key="fallback-polyline"
