@@ -47,9 +47,6 @@ const TraceStyleToggle = ({ colorMode, onToggle, disabled }) => {
       ) : (
         <Route size={18} />
       )}
-      <span className="poi-btn-label">
-        {isElevation ? 'Dénivelé' : 'Surface'}
-      </span>
     </button>
   );
 };

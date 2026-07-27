@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, TrendingUp, Compass, ChevronUp, ChevronDown, Trash2, RotateCcw, Info, Clock, X, Save, Folder } from 'lucide-react';
+import { TrendingUp, Compass, ChevronUp, Clock, X } from 'lucide-react';
 import ElevationChart from './ElevationChart';
 
 const ROAD_TYPE_COLORS = {
@@ -19,10 +19,6 @@ const Dashboard = ({
   elevationLoss,
   elevationProfile,
   roadTypeSummary,
-  onUndo,
-  onReset,
-  onSave,
-  waypointsCount,
   isMobile,
   isOpen,
   onOpen,
@@ -67,8 +63,7 @@ const Dashboard = ({
           minWidth: 'unset' 
         }}
       >
-        <div className="dashboard-handle" style={{ marginBottom: '0.3rem', width: '30px', height: '3px' }} />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.25rem', width: '100%' }}>
+        <div className="mobile-peek-content">
           <div className="mini-stat" style={{ gap: '0.3rem' }}>
             <Compass size={14} className="text-primary" />
             <span style={{ fontWeight: '800', fontSize: '0.9rem' }}>{distance} <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>km</span></span>
@@ -83,6 +78,7 @@ const Dashboard = ({
               {elevationLoading ? '…' : elevation} <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>m</span>
             </span>
           </div>
+          <ChevronUp className="mobile-peek-arrow" size={18} aria-hidden="true" />
         </div>
       </div>
     );
@@ -228,25 +224,37 @@ const Dashboard = ({
 
       {(isExpanded || isMobile) && (
         <>
-          <div className="road-type-bar" style={{ height: '6px', width: '100%', background: '#f1f5f9', borderRadius: '99px', display: 'flex', overflow: 'hidden', marginBottom: '1.5rem', flexShrink: 0, marginTop: '1.5rem' }}>
-            {Object.entries(roadTypeSummary || {}).map(([type, dist]) => (
-              <div 
-                key={type}
-                style={{
-                  width: `${getPercentage(dist)}%`,
-                  height: '100%',
-                  background: ROAD_TYPE_COLORS[type] || ROAD_TYPE_COLORS.Default,
-                  transition: 'all 0.4s'
-                }}
-              />
-            ))}
-          </div>
-
           <div className="expanded-content" style={{ opacity: 1, animation: 'none', paddingBottom: isMobile ? '4rem' : '1rem' }}>
             <div className="stat-grid" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
               <div>
+                <h4 className="font-headline" style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem' }}>Paramètres</h4>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '1rem' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Allure:</span>
+                  <input
+                    type="text"
+                    value={pace}
+                    onChange={(e) => setPace(e.target.value)}
+                    style={{ background: 'transparent', border: 'none', fontWeight: '800', color: 'var(--primary)', width: '60px', outline: 'none' }}
+                  />
+                  <span style={{ fontSize: '0.75rem', fontWeight: '600', opacity: 0.5 }}>min/km</span>
+                </div>
+              </div>
+              <div>
                 <h4 className="font-headline" style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Profil de dénivelé (X: km, Y: m)</h4>
                 <ElevationChart data={elevationProfile} onHover={onElevationHover} />
+              </div>
+              <div className="road-type-bar" style={{ height: '6px', width: '100%', background: '#f1f5f9', borderRadius: '99px', display: 'flex', overflow: 'hidden', flexShrink: 0 }}>
+                {Object.entries(roadTypeSummary || {}).map(([type, dist]) => (
+                  <div
+                    key={type}
+                    style={{
+                      width: `${getPercentage(dist)}%`,
+                      height: '100%',
+                      background: ROAD_TYPE_COLORS[type] || ROAD_TYPE_COLORS.Default,
+                      transition: 'all 0.4s'
+                    }}
+                  />
+                ))}
               </div>
               <div>
                 <h4 className="font-headline" style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem' }}>Profil de surface</h4>
@@ -260,29 +268,6 @@ const Dashboard = ({
                       <span style={{ fontSize: '0.85rem', fontWeight: '800', color: 'var(--primary)' }}>{dist} km</span>
                     </div>
                   ))}
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-                <div>
-                  <h4 className="font-headline" style={{ fontSize: '0.75rem', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem' }}>Paramètres</h4>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: '#f8fafc', padding: '0.75rem 1rem', borderRadius: '1rem' }}>
-                    <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-secondary)' }}>Allure:</span>
-                    <input 
-                      type="text" 
-                      value={pace} 
-                      onChange={(e) => setPace(e.target.value)} 
-                      style={{ background: 'transparent', border: 'none', fontWeight: '800', color: 'var(--primary)', width: '60px', outline: 'none' }} 
-                    />
-                    <span style={{ fontSize: '0.75rem', fontWeight: '600', opacity: 0.5 }}>min/km</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button className="btn" onClick={(e) => { e.stopPropagation(); onSave(); }} disabled={waypointsCount < 2} style={{ width: '100%', background: 'var(--primary)', color: 'white', borderRadius: '1rem', border: 'none', justifyContent: 'center', fontWeight: '700', fontSize: '0.85rem', padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Save size={16} /> Enregistrer
-                  </button>
-                  <button className="btn" onClick={(e) => { e.stopPropagation(); onReset(); }} disabled={waypointsCount === 0} style={{ width: '100%', background: '#fee2e2', color: '#ba1a1a', borderRadius: '1rem', border: 'none', justifyContent: 'center', fontWeight: '700', fontSize: '0.85rem', padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Trash2 size={16} /> Reset
-                  </button>
                 </div>
               </div>
             </div>

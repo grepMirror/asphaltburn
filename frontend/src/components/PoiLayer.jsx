@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useMap, useMapEvents, Marker, Tooltip } from 'react-leaflet';
+import { useMap, Marker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
-import { Tent, Loader2 } from 'lucide-react';
+import { Tent, Loader2, X } from 'lucide-react';
+import { API_BASE_URL } from '../config';
 
 const POI_TYPES = {
   camp_site:      { label: 'Camping',       color: '#10b981', emoji: '⛺' },
-  alpine_hut:     { label: 'Refuge gardé',  color: '#d97706', emoji: '🏔️' },
   drinking_water: { label: 'Eau potable',   color: '#3b82f6', emoji: '🚰' },
-  spring:         { label: 'Source',         color: '#06b6d4', emoji: '💧' },
-  water_point:    { label: 'Point d\'eau',   color: '#3b82f6', emoji: '🚰' },
+  viewpoint:      { label: 'Point de vue',  color: '#8b5cf6', emoji: '👀' },
+  ruins:          { label: 'Ruines',         color: '#78716c', emoji: '🏛️' },
+  monument:       { label: 'Monument',       color: '#a16207', emoji: '🗿' },
 };
 
 const poiIconCache = {};
@@ -27,31 +28,14 @@ const createPoiIcon = (type) => {
 };
 
 const MIN_ZOOM = 11;
-const DEBOUNCE_MS = 800;
-
-const buildOverpassQuery = (bounds) => {
-  const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
-  return `[out:json][timeout:15];(node["tourism"="camp_site"](${bbox});node["tourism"="alpine_hut"](${bbox});node["amenity"="drinking_water"](${bbox});node["natural"="spring"](${bbox});node["amenity"="water_point"](${bbox});way["tourism"="camp_site"](${bbox});way["tourism"="alpine_hut"](${bbox}););out center;`;
-};
-
-const classifyElement = (el) => {
-  const tags = el.tags || {};
-  if (tags.tourism === 'camp_site') return 'camp_site';
-  if (tags.tourism === 'alpine_hut') return 'alpine_hut';
-  if (tags.amenity === 'drinking_water') return 'drinking_water';
-  if (tags.natural === 'spring') return 'spring';
-  if (tags.amenity === 'water_point') return 'water_point';
-  return null;
-};
 
 const PoiLayer = () => {
   const map = useMap();
-  const [active, setActive] = useState(false);
   const [pois, setPois] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const buttonRef = useRef(null);
   const abortRef = useRef(null);
-  const debounceRef = useRef(null);
 
   useEffect(() => {
     if (buttonRef.current) {
@@ -60,10 +44,26 @@ const PoiLayer = () => {
     }
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, []);
+
+  const mergePois = useCallback((incoming) => {
+    setPois((prev) => {
+      const byId = new Map(prev.map((p) => [p.id, p]));
+      for (const poi of incoming) {
+        byId.set(poi.id, poi);
+      }
+      return Array.from(byId.values());
+    });
+  }, []);
+
   const fetchPois = useCallback(async () => {
     const zoom = map.getZoom();
     if (zoom < MIN_ZOOM) {
-      setPois([]);
+      setError('Zoomez davantage pour rechercher des POI.');
       return;
     }
 
@@ -72,109 +72,116 @@ const PoiLayer = () => {
     abortRef.current = controller;
 
     setLoading(true);
+    setError(null);
+
     try {
-      const query = buildOverpassQuery(map.getBounds());
-      const resp = await fetch('https://overpass-api.de/api/interpreter', {
-        method: 'POST',
-        body: `data=${encodeURIComponent(query)}`,
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      const bounds = map.getBounds();
+      const params = new URLSearchParams({
+        min_lat: String(bounds.getSouth()),
+        min_lon: String(bounds.getWest()),
+        max_lat: String(bounds.getNorth()),
+        max_lon: String(bounds.getEast()),
+      });
+
+      const resp = await fetch(`${API_BASE_URL}/api/pois?${params}`, {
         signal: controller.signal,
       });
-      if (!resp.ok) throw new Error(`Overpass ${resp.status}`);
-      const data = await resp.json();
 
-      const results = [];
-      for (const el of data.elements || []) {
-        const type = classifyElement(el);
-        if (!type) continue;
-        const lat = el.lat ?? el.center?.lat;
-        const lng = el.lon ?? el.center?.lon;
-        if (lat == null || lng == null) continue;
-        results.push({ id: el.id, lat, lng, type, name: el.tags?.name || null, website: el.tags?.website || el.tags?.['contact:website'] || null });
+      let detail = null;
+      if (!resp.ok) {
+        try {
+          const body = await resp.json();
+          detail = typeof body?.detail === 'string' ? body.detail : null;
+        } catch {
+          /* ignore parse errors */
+        }
+        throw new Error(detail || `Erreur POI (${resp.status})`);
       }
-      if (!controller.signal.aborted) setPois(results);
+
+      const data = await resp.json();
+      const results = [];
+      for (const el of data || []) {
+        const type = el.type;
+        if (!POI_TYPES[type]) continue;
+        const lat = Number(el.lat);
+        const lng = Number(el.lon ?? el.lng);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+        results.push({
+          id: el.id,
+          lat,
+          lng,
+          type,
+          name: el.name || null,
+          description: el.description || null,
+          website: el.website || null,
+        });
+      }
+
+      if (!controller.signal.aborted) {
+        mergePois(results);
+      }
     } catch (err) {
-      if (err.name !== 'AbortError') console.error('Overpass query failed:', err);
+      if (err.name === 'AbortError') return;
+      console.error('POI query failed:', err);
+      if (!controller.signal.aborted) {
+        setError(err.message || "Impossible de charger les points d'intérêt.");
+      }
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, [map]);
+  }, [map, mergePois]);
 
-  const debouncedFetch = useCallback(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(fetchPois, DEBOUNCE_MS);
-  }, [fetchPois]);
-
-  useMapEvents({
-    moveend() { if (active) debouncedFetch(); },
-  });
-
-  const toggle = (e) => {
-    if (e) { e.stopPropagation(); e.preventDefault(); }
-    if (active) {
-      setPois([]);
-      setActive(false);
-      if (abortRef.current) abortRef.current.abort();
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    } else {
-      setActive(true);
-      fetchPois();
+  const handleClick = (e) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
     }
+    if (loading) return;
+    fetchPois();
   };
-
-  useEffect(() => {
-    return () => {
-      if (abortRef.current) abortRef.current.abort();
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
-
-  const zoomTooLow = active && map.getZoom() < MIN_ZOOM;
 
   return (
     <>
       <button
         ref={buttonRef}
+        type="button"
         className="poi-search-btn glass-panel"
-        onClick={toggle}
+        onClick={handleClick}
         disabled={loading}
-        style={active ? { borderColor: 'var(--primary)', background: 'var(--primary-container)' } : undefined}
+        title="Rechercher les points d'intérêt dans la zone visible"
       >
         {loading ? (
           <Loader2 size={18} className="spinner" />
         ) : (
-          <Tent size={18} style={{ color: active ? 'var(--primary)' : 'inherit' }} />
+          <Tent size={18} />
         )}
         <span className="poi-btn-label">
-          {active
-            ? loading ? 'Recherche…' : `POI (${pois.length})`
-            : 'POI'}
+          {loading
+            ? 'Recherche…'
+            : pois.length > 0
+              ? `POI (${pois.length})`
+              : 'POI'}
         </span>
       </button>
 
-      {active && zoomTooLow && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 1001,
-            background: 'rgba(0,0,0,0.6)',
-            color: 'white',
-            padding: '0.5rem 1rem',
-            borderRadius: '1rem',
-            fontSize: '0.85rem',
-            fontWeight: 600,
-            pointerEvents: 'none',
-          }}
-        >
-          Zoomez davantage pour voir les POI
+      {error && (
+        <div className="poi-error-toast" role="alert">
+          <span className="poi-error-toast__text">{error}</span>
+          <button
+            type="button"
+            className="poi-error-toast__close"
+            onClick={() => setError(null)}
+            aria-label="Fermer"
+            title="Fermer"
+          >
+            <X size={14} />
+          </button>
         </div>
       )}
 
-      {active && pois.map((poi) => {
+      {pois.map((poi) => {
         const config = POI_TYPES[poi.type];
+        if (!config) return null;
         return (
           <Marker
             key={`poi-${poi.id}`}
@@ -185,7 +192,10 @@ const PoiLayer = () => {
               <div className="poi-tooltip-content">
                 <strong>{config.emoji} {poi.name || 'Sans nom'}</strong>
                 <span className="poi-type-tag">{config.label}</span>
-                {(poi.type === 'camp_site' || poi.type === 'alpine_hut') && poi.website && (
+                {poi.description && (
+                  <span className="poi-description">{poi.description}</span>
+                )}
+                {(poi.type === 'camp_site') && poi.website && (
                   <a
                     href={poi.website}
                     target="_blank"

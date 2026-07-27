@@ -54,8 +54,18 @@ class BRouterService:
             response = requests.get(cls.ROUTE_URL, params=params, timeout=120)
             response.raise_for_status()
             feature = response.json()["features"][0]
+        except requests.exceptions.ConnectionError as e:
+            raise RuntimeError(
+                "Impossible de joindre le service d'itinéraire. Vérifiez votre connexion internet."
+            ) from e
+        except requests.exceptions.Timeout as e:
+            raise RuntimeError(
+                "Le calcul d'itinéraire a pris trop de temps. Réessayez dans un instant."
+            ) from e
         except Exception as e:
-            raise RuntimeError(f"BRouter routing failed: {e}") from e
+            raise RuntimeError(
+                "Le calcul d'itinéraire a échoué. Réessayez ou déplacez légèrement vos points."
+            ) from e
 
         raw_coords = feature["geometry"]["coordinates"]  # [lng, lat, elev?]
         lat_lngs = [[c[1], c[0]] for c in raw_coords]

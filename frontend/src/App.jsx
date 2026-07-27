@@ -5,6 +5,7 @@ import Dashboard from './components/Dashboard';
 import TopRightMenu from './components/TopRightMenu';
 import SavedRoutes from './components/SavedRoutes';
 import PinPrompt, { getStoredPin } from './components/PinPrompt';
+import SaveRouteDialog from './components/SaveRouteDialog';
 import './App.css';
 import L from 'leaflet';
 import { API_BASE_URL } from './config';
@@ -25,6 +26,47 @@ const emptyRouteInfo = () => ({
 
 const isRouteRequestCancelled = (error) =>
   axios.isCancel(error) || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';
+
+/** Turn raw API / network errors into a short French message for the toast. */
+function humanizeRouteError(error) {
+  const detail = error?.response?.data?.detail;
+  const raw =
+    typeof detail === 'string'
+      ? detail
+      : Array.isArray(detail)
+        ? detail.map((d) => d.msg || JSON.stringify(d)).join(' — ')
+        : error?.message || '';
+
+  const text = String(raw).toLowerCase();
+
+  if (
+    text.includes('nameresolution') ||
+    text.includes('failed to resolve') ||
+    text.includes('name or service not known') ||
+    text.includes('getaddrinfo') ||
+    text.includes('enotfound')
+  ) {
+    return "Impossible de joindre le service d'itinéraire. Vérifiez votre connexion internet.";
+  }
+  if (
+    text.includes('max retries exceeded') ||
+    text.includes('connection refused') ||
+    text.includes('connection aborted') ||
+    text.includes('connecttimeout') ||
+    text.includes('read timed out') ||
+    text.includes('timeout') ||
+    text.includes('network error')
+  ) {
+    return "Le calcul d'itinéraire est temporairement indisponible. Réessayez dans un instant.";
+  }
+  if (text.includes('brouter')) {
+    return "Le calcul d'itinéraire a échoué. Réessayez ou déplacez légèrement vos points.";
+  }
+  if (raw && raw.length < 160 && !text.includes('httpsconnection') && !text.includes('traceback')) {
+    return raw;
+  }
+  return "Une erreur est survenue lors du calcul de l'itinéraire.";
+}
 
 // Custom hook: detect mobile viewport
 const useIsMobile = () => {
@@ -80,6 +122,10 @@ function App() {
   const [mapBounds, setMapBounds] = useState(null);
   const [showPinPrompt, setShowPinPrompt] = useState(false);
   const [pendingSaveAfterPin, setPendingSaveAfterPin] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [statusToast, setStatusToast] = useState(null); // { type: 'success' | 'error', message }
   const [insertMode, setInsertMode] = useState(null); // null or { afterIndex: number, originIndex: number }
   const [undoStack, setUndoStack] = useState([]); // snapshots: { waypoints, insertMode }
   const [elevationHoverPoint, setElevationHoverPoint] = useState(null);
@@ -206,14 +252,7 @@ function App() {
           if (isRouteRequestCancelled(error)) {
             return;
           }
-          const detail = error.response?.data?.detail;
-          const message =
-            typeof detail === 'string'
-              ? detail
-              : Array.isArray(detail)
-                ? detail.map((d) => d.msg || JSON.stringify(d)).join(' — ')
-                : error.message || 'Erreur réseau';
-          setRouteError(message);
+          setRouteError(humanizeRouteError(error));
           setRouteInfo(emptyRouteInfo());
           console.error('Error calculating route:', error);
           return;
@@ -367,41 +406,43 @@ function App() {
     reader.readAsText(file);
   };
   
-  const doSaveRoute = useCallback(async (pin) => {
+  const doSaveRoute = useCallback(async (pin, { name, trekName }) => {
     if (waypoints.length < 2) return;
-
-    const defaultName = `Itinéraire ${routeInfo.distance_km.toFixed(1)}km - ${new Date().toLocaleDateString('fr-FR')}`;
-    const name = window.prompt("Nom de l'itinéraire :", defaultName);
-    if (!name) return;
 
     const savedRoute = {
       id: "new",
-      name: name,
+      name,
       date: new Date().toISOString(),
-      waypoints: waypoints,
+      waypoints,
       route_data: routeInfo,
       trek_id: activeTrek?.id || null,
-      trek_name: activeTrek?.name || null
+      trek_name: activeTrek?.name || null,
     };
 
-    if (!activeTrek) {
-      const trekNameInput = window.prompt("Nom du Trek (optionnel - pour grouper plusieurs étapes) :");
-      if (trekNameInput) {
-        savedRoute.trek_name = trekNameInput;
-        savedRoute.trek_id = btoa(trekNameInput).substring(0, 8);
-      }
-    } else {
-      if (!window.confirm(`Enregistrer ce segment comme nouvelle étape du trek "${activeTrek.name}" ?`)) return;
+    if (!activeTrek && trekName) {
+      savedRoute.trek_name = trekName;
+      savedRoute.trek_id = btoa(trekName).substring(0, 8);
     }
 
+    setIsSaving(true);
+    setSaveError(null);
     try {
       await axios.post(`${API_BASE_URL}/api/saved-routes`, savedRoute, { params: { pin } });
-      alert("Itinéraire enregistré !");
+      setShowSaveDialog(false);
+      setStatusToast({ type: 'success', message: 'Itinéraire enregistré !' });
     } catch (error) {
       console.error("Error saving route:", error);
-      alert("Erreur lors de l'enregistrement de l'itinéraire.");
+      setSaveError("Erreur lors de l'enregistrement de l'itinéraire.");
+    } finally {
+      setIsSaving(false);
     }
   }, [waypoints, routeInfo, activeTrek]);
+
+  const openSaveDialog = () => {
+    if (waypoints.length < 2) return;
+    setSaveError(null);
+    setShowSaveDialog(true);
+  };
 
   const handleSaveRoute = () => {
     if (waypoints.length < 2) return;
@@ -411,16 +452,41 @@ function App() {
       setShowPinPrompt(true);
       return;
     }
-    doSaveRoute(pin);
+    openSaveDialog();
   };
 
-  const handlePinAuthenticated = (pin) => {
+  const handlePinAuthenticated = () => {
     setShowPinPrompt(false);
     if (pendingSaveAfterPin) {
       setPendingSaveAfterPin(false);
-      doSaveRoute(pin);
+      openSaveDialog();
     }
   };
+
+  const handleSaveDialogSubmit = ({ name, trekName }) => {
+    const pin = getStoredPin();
+    if (!pin) {
+      setShowSaveDialog(false);
+      setPendingSaveAfterPin(true);
+      setShowPinPrompt(true);
+      return;
+    }
+    doSaveRoute(pin, { name, trekName });
+  };
+
+  const handleSaveDialogCancel = () => {
+    if (isSaving) return;
+    setShowSaveDialog(false);
+    setSaveError(null);
+  };
+
+  const saveDialogDefaultName = `Itinéraire ${Number(routeInfo.distance_km || 0).toFixed(1)}km - ${new Date().toLocaleDateString('fr-FR')}`;
+
+  useEffect(() => {
+    if (!statusToast) return undefined;
+    const timer = setTimeout(() => setStatusToast(null), 3200);
+    return () => clearTimeout(timer);
+  }, [statusToast]);
 
   const handleLoadRoute = async (savedRoute) => {
     setRouteError(null);
@@ -473,6 +539,8 @@ function App() {
         onExport={handleExportGPX} 
         onImport={handleImportGPX}
         onUndo={handleUndo}
+        onSave={handleSaveRoute}
+        onReset={handleReset}
         waypointsCount={waypoints.length}
         currentView={view}
         onViewChange={handleViewChange}
@@ -510,15 +578,10 @@ function App() {
             elevationProfile={routeInfo.elevation_profile}
             roadTypeSummary={routeInfo.road_type_summary}
             segments={routeInfo.segments}
-            waypointsCount={waypoints.length}
-            onUndo={handleUndo}
-            onReset={handleReset}
             isMobile={isMobile}
             isOpen={dashboardOpen}
             onOpen={() => setDashboardOpen(true)}
             onClose={() => setDashboardOpen(false)}
-            onSave={handleSaveRoute}
-            activeTrek={activeTrek}
             elevationLoading={isElevationLoading}
             onElevationHover={handleElevationHover}
             elevationHoverActive={!!elevationHoverPoint}
@@ -553,42 +616,35 @@ function App() {
 
       {routeError && (
         <div
+          className={`route-status-toast route-status-toast--error ${isLoading ? 'route-status-toast--below' : ''}`}
           role="alert"
-          style={{
-            position: 'absolute',
-            top: isLoading ? '5.25rem' : '2rem',
-            right: '2rem',
-            maxWidth: 'min(420px, calc(100vw - 2rem))',
-            background: 'rgba(127, 29, 29, 0.92)',
-            padding: '0.65rem 0.85rem',
-            borderRadius: '1rem',
-            zIndex: 1002,
-            backdropFilter: 'blur(4px)',
-            color: 'white',
-            fontSize: '0.85rem',
-            lineHeight: 1.35,
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '0.5rem',
-            boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
-          }}
         >
-          <span style={{ flex: 1 }}>{routeError}</span>
+          <span className="route-status-toast__text">{routeError}</span>
           <button
             type="button"
+            className="route-status-toast__close"
             onClick={() => setRouteError(null)}
             aria-label="Fermer"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'white',
-              cursor: 'pointer',
-              padding: 2,
-              display: 'flex',
-              lineHeight: 0,
-            }}
+            title="Fermer"
           >
-            <X size={18} />
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {statusToast && (
+        <div
+          className={`route-status-toast ${statusToast.type === 'error' ? 'route-status-toast--error' : 'route-status-toast--success'}`}
+          role="status"
+        >
+          <span className="route-status-toast__text">{statusToast.message}</span>
+          <button
+            type="button"
+            className="route-status-toast__close"
+            onClick={() => setStatusToast(null)}
+            aria-label="Fermer"
+          >
+            <X size={16} />
           </button>
         </div>
       )}
@@ -596,6 +652,16 @@ function App() {
       {showPinPrompt && (
         <PinPrompt onAuthenticated={handlePinAuthenticated} />
       )}
+
+      <SaveRouteDialog
+        open={showSaveDialog}
+        defaultName={saveDialogDefaultName}
+        activeTrek={activeTrek}
+        saving={isSaving}
+        error={saveError}
+        onCancel={handleSaveDialogCancel}
+        onSubmit={handleSaveDialogSubmit}
+      />
     </div>
   );
 }

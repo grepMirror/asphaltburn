@@ -19,13 +19,34 @@ const ROAD_TYPE_COLORS = {
   "Default": "#0040a1"          // Premium Blue
 };
 
-/** Flat/downhill → green; climbs → lime → yellow → orange → red by grade %. */
+// A continuous, intuitive scale: blue downhill, green flat, red steep uphill.
+const GRADE_COLOR_STOPS = [
+  { grade: -8, color: [37, 99, 235] },
+  { grade: -3, color: [14, 165, 233] },
+  { grade: -0.5, color: [20, 184, 166] },
+  { grade: 1, color: [34, 197, 94] },
+  { grade: 4, color: [234, 179, 8] },
+  { grade: 8, color: [249, 115, 22] },
+  { grade: 12, color: [220, 38, 38] },
+];
+
 function gradeToColor(gradePercent) {
-  if (gradePercent <= 0.5) return '#10b981'; // flat / downhill
-  if (gradePercent < 3) return '#84cc16';    // gentle climb
-  if (gradePercent < 6) return '#eab308';    // moderate
-  if (gradePercent < 10) return '#f97316';   // steep
-  return '#ef4444';                         // very steep
+  const grade = Math.max(
+    GRADE_COLOR_STOPS[0].grade,
+    Math.min(GRADE_COLOR_STOPS[GRADE_COLOR_STOPS.length - 1].grade, gradePercent)
+  );
+  const upperIndex = GRADE_COLOR_STOPS.findIndex((stop) => grade <= stop.grade);
+  if (upperIndex <= 0) {
+    return `rgb(${GRADE_COLOR_STOPS[0].color.join(',')})`;
+  }
+
+  const lower = GRADE_COLOR_STOPS[upperIndex - 1];
+  const upper = GRADE_COLOR_STOPS[upperIndex];
+  const ratio = (grade - lower.grade) / (upper.grade - lower.grade);
+  const rgb = lower.color.map((channel, index) =>
+    Math.round(channel + (upper.color[index] - channel) * ratio)
+  );
+  return `rgb(${rgb.join(',')})`;
 }
 
 function buildElevationSegments(profile) {
@@ -41,9 +62,29 @@ function buildElevationSegments(profile) {
     const lng2 = Number(b.lng);
     if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) continue;
 
-    const distM = (Number(b.distance) - Number(a.distance)) * 1000;
-    const riseM = Number(b.elevation) - Number(a.elevation);
-    const grade = distM > 1 ? (riseM / distM) * 100 : 0;
+    // Measure over a wider window to suppress GPS/elevation noise. Coloring
+    // every raw point makes an otherwise steady climb look like confetti.
+    let beforeIndex = i - 1;
+    let afterIndex = i;
+    while (
+      beforeIndex > 0
+      && (Number(b.distance) - Number(profile[beforeIndex].distance)) < 0.075
+    ) {
+      beforeIndex -= 1;
+    }
+    while (
+      afterIndex < profile.length - 1
+      && (Number(profile[afterIndex].distance) - Number(a.distance)) < 0.075
+    ) {
+      afterIndex += 1;
+    }
+
+    const before = profile[beforeIndex];
+    const after = profile[afterIndex];
+    const distM = (Number(after.distance) - Number(before.distance)) * 1000;
+    const riseM = Number(after.elevation) - Number(before.elevation);
+    const rawGrade = distM > 1 ? (riseM / distM) * 100 : 0;
+    const grade = Math.round(rawGrade * 2) / 2;
     const color = gradeToColor(grade);
 
     const last = segments[segments.length - 1];
@@ -134,12 +175,12 @@ const ChangeView = ({ center }) => {
   return null;
 };
 
-// Helper to find points at km intervals
-const getKmMarkers = (coords) => {
-  if (coords.length < 2) return [];
+// Helper to find points at km intervals (step adapts to zoom: 1, 5, 10, …)
+const getKmMarkers = (coords, step = 1) => {
+  if (coords.length < 2 || step < 1) return [];
   const markers = [];
   let totalDist = 0;
-  let nextKm = 1;
+  let nextKm = step;
 
   for (let i = 0; i < coords.length - 1; i++) {
     const p1 = L.latLng(coords[i][0], coords[i][1]);
@@ -151,11 +192,47 @@ const getKmMarkers = (coords) => {
       const lat = p1.lat + (p2.lat - p1.lat) * ratio;
       const lng = p1.lng + (p2.lng - p1.lng) * ratio;
       markers.push({ lat, lng, km: nextKm });
-      nextKm++;
+      nextKm += step;
     }
     totalDist += d;
   }
   return markers;
+};
+
+/** Zoomed in → every km; zoomed out → every 5 / 10 / 25 / 50 km. */
+function kmStepForZoom(zoom) {
+  if (zoom >= 13) return 1;
+  if (zoom >= 11) return 5;
+  if (zoom >= 9) return 10;
+  if (zoom >= 7) return 25;
+  return 50;
+}
+
+const KmMarkersLayer = ({ routeCoordinates }) => {
+  const map = useMap();
+  const [zoom, setZoom] = useState(map.getZoom());
+
+  useMapEvents({
+    zoomend() {
+      setZoom(map.getZoom());
+    },
+  });
+
+  const step = kmStepForZoom(zoom);
+  const markers = useMemo(
+    () => getKmMarkers(routeCoordinates, step),
+    [routeCoordinates, step]
+  );
+
+  return markers.map((m) => (
+    <Marker
+      key={`km-${step}-${m.km}`}
+      position={[m.lat, m.lng]}
+      icon={kmIcon(m.km)}
+      zIndexOffset={500}
+      interactive={false}
+    />
+  ));
 };
 
 
@@ -175,7 +252,6 @@ const MapComponent = ({
   elevationHoverPoint,
 }) => {
   const [colorMode, setColorMode] = useState('surface'); // 'surface' | 'elevation'
-  const kmMarkers = getKmMarkers(routeCoordinates);
   const elevationSegments = useMemo(
     () => buildElevationSegments(elevationProfile),
     [elevationProfile]
@@ -283,14 +359,7 @@ const MapComponent = ({
           );
         })}
 
-        {kmMarkers.map((m, idx) => (
-          <Marker
-            key={`km-${idx}`}
-            position={[m.lat, m.lng]}
-            icon={kmIcon(m.km)}
-            zIndexOffset={500}
-          />
-        ))}
+        <KmMarkersLayer routeCoordinates={routeCoordinates} />
 
         {elevationHoverPoint && Number.isFinite(Number(elevationHoverPoint.lat)) && Number.isFinite(Number(elevationHoverPoint.lng)) && (
           <>
@@ -360,15 +429,24 @@ const MapComponent = ({
 
         {/* Trace coloring: surface (road type) or elevation grade */}
         {colorMode === 'elevation' && hasElevation ? (
-          elevationSegments.map((seg, idx) => (
+          <>
             <Polyline
-              key={`elev-seg-${idx}`}
-              positions={seg.coordinates}
-              color={seg.color}
-              weight={6}
-              opacity={0.95}
+              positions={routeCoordinates}
+              color="#ffffff"
+              weight={9}
+              opacity={0.8}
+              interactive={false}
             />
-          ))
+            {elevationSegments.map((seg, idx) => (
+              <Polyline
+                key={`elev-seg-${idx}`}
+                positions={seg.coordinates}
+                color={seg.color}
+                weight={6}
+                opacity={1}
+              />
+            ))}
+          </>
         ) : segments && segments.length > 0 ? (
           segments.map((seg, idx) => (
             <Polyline
