@@ -6,6 +6,8 @@ import LocationButton from './LocationButton';
 import CompassButton from './CompassButton';
 import PoiLayer from './PoiLayer';
 import TraceStyleToggle from './TraceStyleToggle';
+import CachedOsmTileLayer from './CachedOsmTileLayer';
+import { OSM_TILE_URL } from '../utils/offlinePack';
 
 // Color map for road types (synced with Dashboard.jsx)
 const ROAD_TYPE_COLORS = {
@@ -274,9 +276,11 @@ const MapComponent = ({
       >
         <LayersControl position="topleft">
           <LayersControl.BaseLayer checked name="OpenStreetMap">
-            <TileLayer
+            <CachedOsmTileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              url={OSM_TILE_URL}
+              maxZoom={19}
+              crossOrigin
             />
           </LayersControl.BaseLayer>
 

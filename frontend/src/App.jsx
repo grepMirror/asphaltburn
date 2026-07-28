@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import MapComponent from './components/MapComponent';
 import Dashboard from './components/Dashboard';
@@ -9,6 +9,14 @@ import SaveRouteDialog from './components/SaveRouteDialog';
 import './App.css';
 import L from 'leaflet';
 import { API_BASE_URL } from './config';
+import {
+  saveOfflinePack,
+  clearOfflinePack,
+  readOfflinePack,
+  hasOfflinePack as checkHasOfflinePack,
+  isOfflineStorageAvailable,
+  OFFLINE_UNAVAILABLE_MESSAGE,
+} from './utils/offlinePack';
 
 import { X } from 'lucide-react';
 
@@ -99,20 +107,45 @@ function persistTrack(waypoints, activeTrek) {
   } catch { /* quota exceeded or private browsing */ }
 }
 
-function App() {
+function routeInfoFromPack(pack) {
+  return {
+    coordinates: pack.coordinates || [],
+    segments: pack.segments || [],
+    distance_km: pack.distance_km || 0,
+    elevation_gain_m: pack.elevation_gain_m || 0,
+    elevation_loss_m: pack.elevation_loss_m || 0,
+    elevation_profile: pack.elevation_profile || [],
+    road_type_summary: pack.road_type_summary || {},
+  };
+}
+
+function loadInitialAppState() {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    const pack = readOfflinePack();
+    if (pack?.coordinates?.length > 1) {
+      return {
+        waypoints: pack.waypoints || [],
+        routeInfo: routeInfoFromPack(pack),
+        activeTrek: null,
+        offlineHydrated: true,
+      };
+    }
+  }
   const persisted = loadPersistedTrack();
-  const [waypoints, setWaypoints] = useState(persisted?.waypoints || []);
-  const [routeInfo, setRouteInfo] = useState({
-    coordinates: [],
-    segments: [],
-    distance_km: 0,
-    elevation_gain_m: 0,
-    elevation_loss_m: 0,
-    elevation_profile: [],
-    road_type_summary: {}
-  });
+  return {
+    waypoints: persisted?.waypoints || [],
+    routeInfo: emptyRouteInfo(),
+    activeTrek: persisted?.activeTrek || null,
+    offlineHydrated: false,
+  };
+}
+
+function App() {
+  const initial = loadInitialAppState();
+  const [waypoints, setWaypoints] = useState(initial.waypoints);
+  const [routeInfo, setRouteInfo] = useState(initial.routeInfo);
   const [trekRoutes, setTrekRoutes] = useState([]);
-  const [activeTrek, setActiveTrek] = useState(persisted?.activeTrek || null);
+  const [activeTrek, setActiveTrek] = useState(initial.activeTrek);
   const [searchResult, setSearchResult] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isElevationLoading, setIsElevationLoading] = useState(false);
@@ -129,6 +162,12 @@ function App() {
   const [insertMode, setInsertMode] = useState(null); // null or { afterIndex: number, originIndex: number }
   const [undoStack, setUndoStack] = useState([]); // snapshots: { waypoints, insertMode }
   const [elevationHoverPoint, setElevationHoverPoint] = useState(null);
+  const [isOnline, setIsOnline] = useState(
+    typeof navigator === 'undefined' ? true : navigator.onLine
+  );
+  const [hasOfflinePack, setHasOfflinePack] = useState(() => checkHasOfflinePack());
+  const [offlineSaving, setOfflineSaving] = useState(false);
+  const offlineAbortRef = useRef(null);
 
   const isMobile = useIsMobile();
 
@@ -217,16 +256,41 @@ function App() {
   }, [waypoints, activeTrek]);
 
   useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (initial.offlineHydrated) {
+      setStatusToast({ type: 'success', message: 'Mode hors-ligne — itinéraire chargé.' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- show once on mount
+  }, []);
+
+  useEffect(() => {
     if (!routeInfo.elevation_profile?.length) {
       setElevationHoverPoint(null);
     }
   }, [routeInfo.elevation_profile]);
 
-  // Debounced route; backend returns elevation directly when available
+  // Debounced route; backend returns elevation directly when available.
+  // Offline: keep the packed polyline — do not call /api/route.
   useEffect(() => {
     if (waypoints.length < 2) {
       setRouteInfo(emptyRouteInfo());
       setRouteError(null);
+      setIsLoading(false);
+      setIsElevationLoading(false);
+      return undefined;
+    }
+
+    if (!navigator.onLine) {
       setIsLoading(false);
       setIsElevationLoading(false);
       return undefined;
@@ -484,9 +548,11 @@ function App() {
 
   useEffect(() => {
     if (!statusToast) return undefined;
+    // Keep progress toast visible while downloading.
+    if (offlineSaving) return undefined;
     const timer = setTimeout(() => setStatusToast(null), 3200);
     return () => clearTimeout(timer);
-  }, [statusToast]);
+  }, [statusToast, offlineSaving]);
 
   const handleLoadRoute = async (savedRoute) => {
     setRouteError(null);
@@ -531,6 +597,71 @@ function App() {
     setView('map');
   };
 
+  const handleSaveOffline = async () => {
+    if ((routeInfo.coordinates?.length || 0) < 2) {
+      setStatusToast({ type: 'error', message: 'Calculez un itinéraire avant de sauver hors-ligne.' });
+      return;
+    }
+    if (!navigator.onLine) {
+      setStatusToast({ type: 'error', message: 'Connectez-vous pour télécharger les tuiles.' });
+      return;
+    }
+    if (!isOfflineStorageAvailable()) {
+      setStatusToast({ type: 'error', message: OFFLINE_UNAVAILABLE_MESSAGE });
+      return;
+    }
+
+    if (offlineAbortRef.current) {
+      offlineAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    offlineAbortRef.current = controller;
+
+    setOfflineSaving(true);
+    setStatusToast({ type: 'success', message: 'Téléchargement hors-ligne : 0%…' });
+    try {
+      const { pack, failedHint } = await saveOfflinePack({
+        waypoints,
+        routeInfo,
+        signal: controller.signal,
+        onProgress: (done, total) => {
+          const pct = total ? Math.round((done / total) * 100) : 0;
+          setStatusToast({
+            type: 'success',
+            message: `Téléchargement hors-ligne : ${pct}% (${done}/${total})`,
+          });
+        },
+      });
+      setHasOfflinePack(true);
+      const tip = failedHint
+        ? ` Pack sauvé (${pack.tileCount} tuiles). Quelques tuiles manquent.`
+        : ` Pack sauvé (${pack.tileCount} tuiles).`;
+      setStatusToast({ type: 'success', message: tip.trim() });
+    } catch (error) {
+      if (error?.name === 'AbortError') return;
+      console.error('Offline pack error:', error);
+      setStatusToast({
+        type: 'error',
+        message: error?.message || 'Échec de la sauvegarde hors-ligne.',
+      });
+      setHasOfflinePack(checkHasOfflinePack());
+    } finally {
+      setOfflineSaving(false);
+      offlineAbortRef.current = null;
+    }
+  };
+
+  const handleClearOffline = async () => {
+    try {
+      await clearOfflinePack();
+      setHasOfflinePack(false);
+      setStatusToast({ type: 'success', message: 'Données hors-ligne effacées.' });
+    } catch (error) {
+      console.error('Clear offline pack error:', error);
+      setStatusToast({ type: 'error', message: 'Impossible d\'effacer le pack hors-ligne.' });
+    }
+  };
+
 
   return (
     <div className="app-container">
@@ -544,6 +675,13 @@ function App() {
         waypointsCount={waypoints.length}
         currentView={view}
         onViewChange={handleViewChange}
+        onSaveOffline={handleSaveOffline}
+        onClearOffline={handleClearOffline}
+        canSaveOffline={
+          (routeInfo.coordinates?.length || 0) > 1 && isOnline && isOfflineStorageAvailable()
+        }
+        hasOfflinePack={hasOfflinePack}
+        offlineSaving={offlineSaving}
       />
       
       {view === 'map' ? (

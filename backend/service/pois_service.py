@@ -26,8 +26,8 @@ _HEADERS = {
 }
 
 # Fail over quickly: don't wait 35s on a dead mirror.
-_CONNECT_TIMEOUT = 4
-_READ_TIMEOUT = 12
+_CONNECT_TIMEOUT = 2
+_READ_TIMEOUT = 5
 
 # Cache: normalized bbox key → {pois, fetched_at}
 _CACHE: dict[str, dict] = {}
@@ -96,14 +96,18 @@ def _cache_set(key: str, pois: list) -> None:
 
 
 def _build_query(bbox: str) -> str:
-    # Hiking-focused: camps, potable water, viewpoints, ruins, monuments.
+    # Hiking-focused: camps/huts, potable water, viewpoints/waterfalls, peaks, ruins, monuments.
     # No springs / generic water_point / shelters.
     return f"""
 [out:json][timeout:10];
 (
   node["tourism"="camp_site"]({bbox});
   node["tourism"="caravan_site"]({bbox});
-  node["tourism"="viewpoint"]({bbox});
+  node["tourism"="alpine_hut"]({bbox});
+  node["tourism"="wilderness_hut"]({bbox});
+  node["tourism"="viewpoint"]["name"]({bbox});
+  node["waterway"="waterfall"]["name"]({bbox});
+  node["natural"="peak"]["name"]({bbox});
   node["historic"="ruins"]({bbox});
   node["historic"="monument"]({bbox});
   node["historic"="memorial"]({bbox});
@@ -111,7 +115,10 @@ def _build_query(bbox: str) -> str:
 
   way["tourism"="camp_site"]({bbox});
   way["tourism"="caravan_site"]({bbox});
-  way["tourism"="viewpoint"]({bbox});
+  way["tourism"="alpine_hut"]({bbox});
+  way["tourism"="wilderness_hut"]({bbox});
+  way["tourism"="viewpoint"]["name"]({bbox});
+  way["waterway"="waterfall"]["name"]({bbox});
   way["historic"="ruins"]({bbox});
   way["historic"="monument"]({bbox});
   way["historic"="memorial"]({bbox});
@@ -169,6 +176,11 @@ def _fetch_from_overpass(min_lat: float, min_lon: float, max_lat: float, max_lon
         if not category:
             continue
 
+        name = (tags.get("name") or "").strip() or None
+        # Viewpoints / waterfalls / peaks without a name are too noisy on the map
+        if category in ("viewpoint", "peak") and not name:
+            continue
+
         lat = element.get("lat")
         lon = element.get("lon")
         if lat is None or lon is None:
@@ -189,7 +201,7 @@ def _fetch_from_overpass(min_lat: float, min_lon: float, max_lat: float, max_lon
             "id": qualified_id,
             "lat": lat,
             "lon": lon,
-            "name": tags.get("name") or None,
+            "name": name,
             "type": category,
             "description": tags.get("description:fr") or tags.get("description") or None,
             "website": tags.get("website") or tags.get("contact:website") or None,
@@ -201,10 +213,16 @@ def _fetch_from_overpass(min_lat: float, min_lon: float, max_lat: float, max_lon
 def _categorize_poi(tags: dict) -> Optional[str]:
     """Map OSM tags to frontend icon categories."""
     tourism = tags.get("tourism")
-    if tourism in ("camp_site", "caravan_site"):
+    if tourism in ("camp_site", "caravan_site", "alpine_hut", "wilderness_hut"):
         return "camp_site"
     if tourism == "viewpoint":
         return "viewpoint"
+
+    if tags.get("waterway") == "waterfall":
+        return "viewpoint"
+
+    if tags.get("natural") == "peak":
+        return "peak"
 
     historic = tags.get("historic")
     if historic == "ruins":

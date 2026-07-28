@@ -29,3 +29,7 @@ map_data
 *.sw?
 ssh_key
 .garminconnect
+
+# Secrets / local env (copy from .env.prod.example)
+.env
+backend/.env

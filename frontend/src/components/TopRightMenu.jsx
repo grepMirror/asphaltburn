@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, Upload, Download, X, Map as MapIcon, RotateCcw, List, Menu, Save, Trash2 } from 'lucide-react';
+import {
+  Search, Upload, Download, X, Map as MapIcon, RotateCcw, List, Menu, Save, Trash2, WifiOff, HardDrive,
+} from 'lucide-react';
 import SearchBar from './SearchBar';
 
 const useIsMobile = () => {
@@ -22,6 +24,11 @@ const TopRightMenu = ({
   waypointsCount,
   currentView,
   onViewChange,
+  onSaveOffline,
+  onClearOffline,
+  canSaveOffline = false,
+  hasOfflinePack = false,
+  offlineSaving = false,
 }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const [menuExpanded, setMenuExpanded] = useState(false);
@@ -127,6 +134,25 @@ const TopRightMenu = ({
           >
             <Download size={18} />
             <span>Exporter GPX</span>
+          </button>
+
+          <div className="mobile-menu-divider" />
+
+          <button
+            className="mobile-menu-item"
+            onClick={() => handleMenuAction(onSaveOffline)}
+            disabled={!canSaveOffline || offlineSaving}
+          >
+            <HardDrive size={18} />
+            <span>{offlineSaving ? 'Téléchargement…' : 'Sauver hors-ligne'}</span>
+          </button>
+          <button
+            className="mobile-menu-item"
+            onClick={() => handleMenuAction(onClearOffline)}
+            disabled={!hasOfflinePack || offlineSaving}
+          >
+            <WifiOff size={18} />
+            <span>Effacer hors-ligne</span>
           </button>
 
           <div className="mobile-menu-divider" />

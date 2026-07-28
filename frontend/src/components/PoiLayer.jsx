@@ -5,11 +5,12 @@ import { Tent, Loader2, X } from 'lucide-react';
 import { API_BASE_URL } from '../config';
 
 const POI_TYPES = {
-  camp_site:      { label: 'Camping',       color: '#10b981', emoji: '⛺' },
-  drinking_water: { label: 'Eau potable',   color: '#3b82f6', emoji: '🚰' },
-  viewpoint:      { label: 'Point de vue',  color: '#8b5cf6', emoji: '👀' },
-  ruins:          { label: 'Ruines',         color: '#78716c', emoji: '🏛️' },
-  monument:       { label: 'Monument',       color: '#a16207', emoji: '🗿' },
+  camp_site:      { label: 'Camping / Refuge', color: '#10b981', emoji: '⛺' },
+  drinking_water: { label: 'Eau potable',      color: '#3b82f6', emoji: '🚰' },
+  viewpoint:      { label: 'Point de vue',     color: '#8b5cf6', emoji: '👀' },
+  peak:           { label: 'Sommet',           color: '#ef4444', emoji: '⛰️' },
+  ruins:          { label: 'Ruines',            color: '#78716c', emoji: '🏛️' },
+  monument:       { label: 'Monument',          color: '#a16207', emoji: '🗿' },
 };
 
 const poiIconCache = {};
@@ -27,7 +28,7 @@ const createPoiIcon = (type) => {
   return icon;
 };
 
-const MIN_ZOOM = 11;
+const MIN_ZOOM = 12;
 
 const PoiLayer = () => {
   const map = useMap();
@@ -103,6 +104,8 @@ const PoiLayer = () => {
       for (const el of data || []) {
         const type = el.type;
         if (!POI_TYPES[type]) continue;
+        const name = (el.name || '').trim() || null;
+        if ((type === 'viewpoint' || type === 'peak') && !name) continue;
         const lat = Number(el.lat);
         const lng = Number(el.lon ?? el.lng);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
@@ -111,7 +114,7 @@ const PoiLayer = () => {
           lat,
           lng,
           type,
-          name: el.name || null,
+          name,
           description: el.description || null,
           website: el.website || null,
         });

@@ -17,10 +17,10 @@ async def read_pois(min_lat: float, min_lon: float, max_lat: float, max_lon: flo
     if min_lat >= max_lat or min_lon >= max_lon:
         raise HTTPException(status_code=400, detail="Bounding box invalide.")
 
-    # Guard against huge worldwide queries that overload Overpass
+    # Guard against huge queries that overload Overpass (~55 km at mid-latitudes)
     lat_span = max_lat - min_lat
     lon_span = max_lon - min_lon
-    if lat_span > 2.5 or lon_span > 2.5:
+    if lat_span > 0.5 or lon_span > 0.5:
         raise HTTPException(
             status_code=400,
             detail="Zone trop large. Zoomez un peu avant de rechercher des POI.",
